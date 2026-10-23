@@ -31,7 +31,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _ui = SynchronizationContext.Current ?? throw new InvalidOperationException("Create on the UI thread.");
         _settings = store.Load();
         _policy.Apply(_settings);
-        _neverConvert = new NeverConvertList(_settings.NeverConvert);
+        var (key, keyCreated) = LearnedWordKey.LoadOrCreate(_settings, logger);
+        _neverConvert = new NeverConvertList(_settings.NeverConvert, _settings.NeverConvertLearned, new HmacWordHasher(key));
+        System.Security.Cryptography.CryptographicOperations.ZeroMemory(key); // the hasher keeps its own copy
+        if (keyCreated)
+        {
+            store.Save(_settings);
+        }
+
         _neverConvert.Changed += (_, _) => _ui.Post(_ => SaveNeverConvert(), null);
 
         _enabledItem = new ToolStripMenuItem("&Enabled", null, (_, _) => ToggleEnabled()) { Checked = _settings.Enabled };
@@ -137,7 +144,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        _settings.NeverConvert = [.. _neverConvert.Snapshot()];
+        SyncNeverConvert();
         using var form = _settingsForm = new SettingsForm(_settings, StartupRegistration.IsEnabled());
         if (form.ShowDialog() != DialogResult.OK)
         {
@@ -146,6 +153,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _settings = form.Result;
         _neverConvert.ReplaceAll(_settings.NeverConvert);
+        if (form.ForgetLearnedWords)
+        {
+            _neverConvert.ForgetLearned();
+            _settings.NeverConvertLearned = [];
+        }
         _policy.Apply(_settings);
         _store.Save(_settings);
         if (form.StartWithWindows != StartupRegistration.IsEnabled())
@@ -159,8 +171,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void SaveNeverConvert()
     {
-        _settings.NeverConvert = [.. _neverConvert.Snapshot()];
+        SyncNeverConvert();
         _store.Save(_settings);
+    }
+
+    private void SyncNeverConvert()
+    {
+        _settings.NeverConvert = [.. _neverConvert.Snapshot()];
+        _settings.NeverConvertLearned = [.. _neverConvert.LearnedSnapshot()];
     }
 
     private void UpdateUi()

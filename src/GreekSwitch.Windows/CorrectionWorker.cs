@@ -93,6 +93,7 @@ public sealed class CorrectionWorker
     private void OnKey(InputEvent input)
     {
         _monitor.TypeAhead.MarkProcessed(input.TypedCount);
+        _monitor.Focus.Expect(input.Window);
 
         // Keys queued just before the hook was told to stop capturing are dropped here.
         if (!_monitor.CaptureKeys)

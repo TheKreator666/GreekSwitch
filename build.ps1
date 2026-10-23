@@ -35,5 +35,8 @@ if (-not $SkipPublish) {
     # Code signing placeholder: sign publish/GreekSwitch.exe here once a certificate is available, e.g.
     #   signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a publish/GreekSwitch.exe
 
-    Write-Host "==> done: publish/GreekSwitch.exe" -ForegroundColor Green
+    # The exe is unsigned: publish its SHA-256 so a copy can be checked with Get-FileHash.
+    $hash = (Get-FileHash publish/GreekSwitch.exe -Algorithm SHA256).Hash
+    Set-Content -Path publish/GreekSwitch.exe.sha256 -Value "$hash  GreekSwitch.exe" -Encoding ascii
+    Write-Host "==> done: publish/GreekSwitch.exe (SHA-256 $hash)" -ForegroundColor Green
 }

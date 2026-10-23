@@ -14,30 +14,40 @@ public sealed record CompletedWord(
     bool Tainted);
 
 /// <summary>
-/// The physical keys of the word being typed. Memory only, and cleared on every boundary
-/// and reset.
+/// The physical keys of the word being typed. Memory only, and wiped on every boundary and reset.
+/// It keeps its own array because List&lt;T&gt;.Clear() leaves plain structs such as KeyStroke in its
+/// backing store, where they would linger (e.g. in a crash dump).
 /// </summary>
 public sealed class WordBuffer
 {
-    private readonly List<KeyStroke> _keys = [];
+    private KeyStroke[] _keys = new KeyStroke[32];
+    private int _count;
     private Lang _layout;
     private bool _tainted;
     private bool _followsPeriod;
 
-    public IReadOnlyList<KeyStroke> Keys => _keys;
+    public IReadOnlyList<KeyStroke> Keys => new ArraySegment<KeyStroke>(_keys, 0, _count);
 
-    public int Count => _keys.Count;
+    public int Count => _count;
 
-    public bool IsEmpty => _keys.Count == 0;
+    public bool IsEmpty => _count == 0;
 
     public void Append(KeyStroke key, Lang activeLayout)
     {
-        if (_keys.Count == 0)
+        if (_count == 0)
         {
             _layout = activeLayout;
         }
 
-        _keys.Add(key);
+        if (_count == _keys.Length)
+        {
+            var larger = new KeyStroke[_keys.Length * 2];
+            _keys.CopyTo(larger, 0);
+            Array.Clear(_keys);
+            _keys = larger;
+        }
+
+        _keys[_count++] = key;
     }
 
     /// <summary>
@@ -46,23 +56,23 @@ public sealed class WordBuffer
     /// </summary>
     public bool Pop()
     {
-        if (_keys.Count == 0)
+        if (_count == 0)
         {
             _tainted = true;
             _followsPeriod = false;
             return false;
         }
 
-        _keys.RemoveAt(_keys.Count - 1);
+        _keys[--_count] = default;
         return true;
     }
 
     /// <summary>Ends the current word at <paramref name="delimiter"/> and starts a new one.</summary>
     public CompletedWord? Complete(Delimiter delimiter)
     {
-        CompletedWord? word = _keys.Count == 0
+        CompletedWord? word = _count == 0
             ? null
-            : new CompletedWord([.. _keys], _layout, delimiter, _followsPeriod, _tainted);
+            : new CompletedWord(_keys[.._count], _layout, delimiter, _followsPeriod, _tainted);
 
         Clear();
         _followsPeriod = word is not null && delimiter is { Kind: DelimiterKind.Punctuation, Text: "." };
@@ -73,7 +83,11 @@ public sealed class WordBuffer
     public void Restore(IReadOnlyList<KeyStroke> keys, Lang layout)
     {
         Clear();
-        _keys.AddRange(keys);
+        foreach (var key in keys)
+        {
+            Append(key, layout);
+        }
+
         _layout = layout;
     }
 
@@ -86,7 +100,8 @@ public sealed class WordBuffer
 
     private void Clear()
     {
-        _keys.Clear();
+        Array.Clear(_keys); // the whole array, including slots freed by Pop
+        _count = 0;
         _tainted = false;
     }
 }

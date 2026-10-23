@@ -33,6 +33,12 @@ internal static class Program
             logger.LogError("UI exception: {Type}{NewLine}{Stack}", e.Exception.GetType().FullName, Environment.NewLine, e.Exception.StackTrace);
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
 
+        // A crash report or dump could contain the word being typed.
+        if (!GreekSwitch.Windows.ErrorReporting.ExcludeThisApp())
+        {
+            logger.LogWarning("Could not exclude GreekSwitch from Windows Error Reporting");
+        }
+
         ApplicationConfiguration.Initialize();
         SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
 

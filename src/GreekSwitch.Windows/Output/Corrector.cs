@@ -50,6 +50,9 @@ public sealed class Corrector : ICorrectionOutput
     private readonly ILogger _logger;
     private readonly IInputSender _sender;
     private readonly Func<int, ushort> _scanCode;
+    private readonly FocusGuard _focus;
+    private readonly Func<nint> _currentFocus;
+    private readonly Func<nint, bool> _isCommandWindow;
     private readonly TimeSpan _timeout;
 
     public Corrector(
@@ -58,18 +61,24 @@ public sealed class Corrector : ICorrectionOutput
         TypeAheadGuard typeAhead,
         IKeyboardState keyboard,
         ILogger logger,
+        FocusGuard? focus = null,
         IInputSender? sender = null,
         Func<int, ushort>? scanCode = null,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        Func<nint>? currentFocus = null,
+        Func<nint, bool>? isCommandWindow = null)
     {
         _layouts = layouts;
         _maps = maps;
         _typeAhead = typeAhead;
         _keyboard = keyboard;
         _logger = logger;
+        _focus = focus ?? new FocusGuard();
         _sender = sender ?? new Win32InputSender();
         _scanCode = scanCode ?? (vk => (ushort)MapVirtualKeyExW((uint)vk, 0 /* MAPVK_VK_TO_VSC */, 0));
         _timeout = timeout ?? TimeSpan.FromMilliseconds(300);
+        _currentFocus = currentFocus ?? (() => KeyboardLayouts.ForegroundLayout().FocusWindow);
+        _isCommandWindow = isCommandWindow ?? Focus.CommandWindows.IsCommandWindow;
     }
 
     /// <summary>Extra wait after the focused window reports a layout switch, before typing.</summary>
@@ -80,6 +89,19 @@ public sealed class Corrector : ICorrectionOutput
         if (_keyboard.CommandModifierHeld)
         {
             _logger.LogInformation("Correction skipped: a modifier key is held");
+            return false;
+        }
+
+        if (!_focus.StillFocused(_currentFocus()))
+        {
+            _logger.LogInformation("Correction skipped: focus moved to another control");
+            return false;
+        }
+
+        // Retyping Enter in a terminal would run the corrected text as a new command.
+        if (text.AsSpan().IndexOfAny('\n', '\t') >= 0 && _isCommandWindow(_currentFocus()))
+        {
+            _logger.LogInformation("Correction skipped: Enter/Tab in a terminal or IDE");
             return false;
         }
 
@@ -100,6 +122,13 @@ public sealed class Corrector : ICorrectionOutput
         if (_typeAhead.UserTypedAhead)
         {
             _logger.LogInformation("Correction skipped: typing continued before it could be applied");
+            return false;
+        }
+
+        // Focus can also move during the layout switch and settle pause.
+        if (!_focus.StillFocused(_currentFocus()))
+        {
+            _logger.LogInformation("Correction skipped: focus moved to another control");
             return false;
         }
 

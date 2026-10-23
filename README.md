@@ -49,9 +49,11 @@ correction (before any other key). That:
 1. puts back exactly what you typed (without the space or punctuation, which your Backspace
    just deleted),
 2. switches the layout back, and
-3. adds the word to the **never-convert list**, so it's left alone from now on.
+3. remembers the word so it's left alone from now on. It stores only a keyed hash, never the
+   text, in case the "word" was a password (see [SECURITY.md](SECURITY.md)).
 
-Type Space and carry on. To forget a never-convert word, remove it in Settings. Any other key
+Type Space and carry on. To forget the learned words, use Settings → *Forget learned words*.
+Words you type into the Settings list yourself are kept as readable text. Any other key
 after a correction (or a click, arrow key, focus change and so on) disarms undo, and Backspace
 becomes an ordinary Backspace again.
 
@@ -68,8 +70,9 @@ hand while GreekSwitch is closed:
 | `dictionaryWeight` / `ngramWeight` / `contextWeight` | `2.0` / `1.0` / `0.3` | Scoring weights (see *How it decides*). File only; not in the dialog. |
 | `layoutSwitchSettleMs` | `50` | Pause after an app reports a layout switch, before retyping the word (0–250). File only; takes effect on restart. See *Known limitations*. |
 | `correctOnEnterAndTab` | `false` | Also correct words ended by Enter/Tab. Off because by the time GreekSwitch sees the key, Enter may already have sent a chat message and Tab may have moved focus. |
-| `excludedProcesses` | terminals, IDEs, password managers, game launchers and common games | Executable names where GreekSwitch is completely passive. The defaults include `WindowsTerminal.exe`, `cmd.exe`, `powershell.exe`, `pwsh.exe`, `Code.exe`, `devenv.exe` and `rider64.exe`. "Restore default exclusions" in the dialog brings the list back. |
-| `neverConvert` | `[]` | Words never to convert (accent- and case-insensitive). Undo adds to it. |
+| `excludedProcesses` | terminals, IDEs, game launchers and common games | Executable names where GreekSwitch is completely passive. The defaults include `WindowsTerminal.exe`, `cmd.exe`, `powershell.exe`, `pwsh.exe`, `Code.exe`, `devenv.exe` and `rider64.exe`. "Restore default exclusions" in the dialog brings the list back. Password managers are **always** excluded, built in, and not part of this list. |
+| `neverConvert` | `[]` | Words never to convert that you typed into Settings (accent- and case-insensitive). |
+| `neverConvertLearned` / `neverConvertKey` | | Words learned from undo, as HMAC hashes, and their key, encrypted with DPAPI for your Windows account. Not meant to be edited; *Forget learned words* in Settings clears them. Hashes copied to another machine or account don't work there. |
 | `debugLogText` | `false` | **Debug builds only**: log the words themselves. Compiled out of Release builds. |
 
 Start with Windows lives in the registry, not in this file.
@@ -124,9 +127,11 @@ correct (e.g. *India* → *Ινδια*).
 ## Privacy
 
 There is no network access of any kind, no telemetry and no update checks. Keystrokes and words
-are never written to disk. The only words ever stored are the ones on your never-convert list,
-in `settings.json`. GreekSwitch is fully passive in password fields (detected with UI
-Automation) and in excluded apps. Details: [SECURITY.md](SECURITY.md).
+are never written to disk. The only readable words ever stored are the ones you type into the
+never-convert list yourself; words learned from undo are stored only as keyed hashes.
+GreekSwitch is fully passive in password fields (detected with UI Automation), in excluded
+apps, and always in password managers. A correction is only typed into the control the word
+was typed into, and Enter is never retyped into a terminal. Details: [SECURITY.md](SECURITY.md).
 
 The event log is `%LOCALAPPDATA%\GreekSwitch\greekswitch.log` (rolled at 1 MB). It records
 events such as `Replacement made, lang GR→EN, length 11, reason Dictionary`, but never the
@@ -156,7 +161,7 @@ text. A unit test enforces this.
   the retyped text.
 - **Enter/Tab-ended words aren't corrected** unless you turn on `correctOnEnterAndTab`.
 - **Memory and size.** The full Greek Hunspell dictionary (about 830k forms) uses roughly
-  180 MB of RAM and takes about 1 s to load at startup. The self-contained exe is about 75 MB.
+  180 MB of RAM and takes about 1 s to load at startup. The self-contained exe is about 67 MB.
 - **Dead-key edge cases.** A dead key followed by Space types a lone accent in Greek; such words
   are left as they are.
 - **Caps Lock** is tracked from key events after start-up. If it gets out of sync (rare, e.g.

@@ -20,9 +20,16 @@ public class CorrectorTests
     private readonly FakeSwitcher _layouts = new(Lang.Greek);
     private readonly TypeAheadGuard _guard = new();
     private readonly FakeKeyboard _keyboard = new();
+    private readonly FocusGuard _focus = new();
     private readonly FakeSender _sender;
+    private nint _currentFocus = 0x100;
+    private bool _commandWindow;
 
-    public CorrectorTests() => _sender = new FakeSender(_layouts);
+    public CorrectorTests()
+    {
+        _sender = new FakeSender(_layouts);
+        _focus.Expect(0x100); // the word was typed into window 0x100
+    }
 
     private Corrector Create(TimeSpan? timeout = null) => new(
         _layouts,
@@ -30,9 +37,60 @@ public class CorrectorTests
         _guard,
         _keyboard,
         NullLogger.Instance,
+        _focus,
         _sender,
         vk => (ushort)(vk + 1000), // recognisable fake scan codes
-        timeout ?? TimeSpan.FromMilliseconds(200));
+        timeout ?? TimeSpan.FromMilliseconds(200),
+        () => _currentFocus,
+        _ => _commandWindow);
+
+    [Fact]
+    public void Types_nothing_if_focus_moved_to_another_control()
+    {
+        _currentFocus = 0x200; // e.g. a popup took focus after the word was typed
+
+        Create().Replace(12, "application ", Lang.English).Should().BeFalse();
+
+        _sender.Batches.Should().BeEmpty();
+        _layouts.SwitchRequests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Types_nothing_if_focus_moves_during_the_layout_switch()
+    {
+        _layouts.PollsUntilSwitch = 2;
+        _layouts.OnSwitched = () => _currentFocus = 0x200;
+
+        Create().Replace(12, "application ", Lang.English).Should().BeFalse();
+
+        _sender.Batches.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("application\n")]
+    [InlineData("application\t")]
+    public void Never_retypes_enter_or_tab_into_a_terminal(string text)
+    {
+        _commandWindow = true;
+
+        Create().Replace(12, text, Lang.English).Should().BeFalse();
+
+        _sender.Batches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Space_ended_corrections_still_work_in_a_terminal()
+    {
+        _commandWindow = true;
+
+        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Enter_ended_corrections_work_outside_terminals()
+    {
+        Create().Replace(12, "application\n", Lang.English).Should().BeTrue();
+    }
 
     /// <summary>The characters a batch types, decoded the way the target layout would.</summary>
     private static string Typed(INPUT[] batch, Lang layout)
@@ -214,12 +272,15 @@ public class CorrectorTests
 
         public List<Lang> SwitchRequests { get; } = [];
 
+        public Action? OnSwitched { get; set; }
+
         public Lang? CurrentLayout()
         {
             if (_pending is { } target && ++_polls > PollsUntilSwitch)
             {
                 Current = target;
                 _pending = null;
+                OnSwitched?.Invoke();
             }
 
             return Current;

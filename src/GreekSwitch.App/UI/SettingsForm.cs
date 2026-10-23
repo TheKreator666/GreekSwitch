@@ -54,8 +54,18 @@ internal sealed class SettingsForm : Form
         AddRow(layout, Label("Excluded apps (one .exe per line):"));
         AddRow(layout, _excluded);
         AddRow(layout, restore);
-        AddRow(layout, Label("Never convert these words (one per line; undo adds to this list):"));
+        AddRow(layout, Label("Never convert these words (one per line):"));
         AddRow(layout, _neverConvert);
+        var learned = Label($"Plus {settings.NeverConvertLearned.Count} word(s) learned from undo, stored only as unreadable hashes.");
+        var forget = new Button { Text = "Forget learned words", AutoSize = true, Enabled = settings.NeverConvertLearned.Count > 0 };
+        forget.Click += (_, _) =>
+        {
+            ForgetLearnedWords = true;
+            forget.Enabled = false;
+            learned.Text = "Learned words will be forgotten when you press OK.";
+        };
+        AddRow(layout, learned, forget);
+        AddRow(layout, Label("Password managers are always excluded."));
 
         var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
         buttons.Controls.Add(cancel);
@@ -67,6 +77,9 @@ internal sealed class SettingsForm : Form
     public AppSettings Result { get; private set; }
 
     public bool StartWithWindows => _startWithWindows.Checked;
+
+    /// <summary>The user asked to forget every word learned from undo.</summary>
+    public bool ForgetLearnedWords { get; private set; }
 
     private static TextBox MultilineBox() => new()
     {
@@ -105,6 +118,8 @@ internal sealed class SettingsForm : Form
         ContextWeight = original.ContextWeight,
         DebugLogText = original.DebugLogText,
         LayoutSwitchSettleMs = original.LayoutSwitchSettleMs,
+        NeverConvertLearned = original.NeverConvertLearned,
+        NeverConvertKey = original.NeverConvertKey,
         ExcludedProcesses = Lines(_excluded),
         NeverConvert = Lines(_neverConvert),
     };

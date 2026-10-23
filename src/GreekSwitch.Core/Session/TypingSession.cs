@@ -137,7 +137,7 @@ public sealed class TypingSession
             return;
         }
 
-        _neverConvert.Add(Scorer.LexicalCore(undo.Original));
+        _neverConvert.Learn(Scorer.LexicalCore(undo.Original));
         _buffer.Restore(undo.Keys, undo.OriginalLayout);
 
         _logger.LogInformation(

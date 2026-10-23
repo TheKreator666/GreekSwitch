@@ -13,6 +13,23 @@
     <Description>Greek/English keyboard layout auto-corrector</Description>
   </PropertyGroup>
 
+  <!--
+    The desktop runtime pack ships WPF's native DLLs with every WinForms app. GreekSwitch doesn't
+    use WPF, and a single-file exe would unpack them into a user-writable temp folder on every
+    run, where another program could tamper with them. Leave them out, so nothing is extracted.
+  -->
+  <Target Name="DropUnusedWpfNatives" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(Filename)' == 'wpfgfx_cor3' or '%(Filename)' == 'PresentationNative_cor3' or '%(Filename)' == 'D3DCompiler_47_cor3' or '%(Filename)' == 'PenImc_cor3' or '%(Filename)' == 'vcruntime140_cor3'" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <!-- DPAPI: encrypts the key that protects learned never-convert words. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\GreekSwitch.Core\GreekSwitch.Core.csproj" />
     <ProjectReference Include="..\GreekSwitch.Windows\GreekSwitch.Windows.csproj" />

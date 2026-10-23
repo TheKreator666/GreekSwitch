@@ -16,7 +16,8 @@ public enum InputEventKind
 public readonly record struct InputEvent(InputEventKind Kind, KeyInput Key = default, nint Window = 0, string? ErrorType = null, long TypedCount = 0)
 {
     /// <param name="typedCount">TypeAheadGuard count when the key was captured.</param>
-    public static InputEvent ForKey(KeyInput key, long typedCount) => new(InputEventKind.Key, key, TypedCount: typedCount);
+    /// <param name="focusWindow">The control that had keyboard focus when the key was pressed.</param>
+    public static InputEvent ForKey(KeyInput key, long typedCount, nint focusWindow) => new(InputEventKind.Key, key, focusWindow, TypedCount: typedCount);
 
     public static InputEvent Click() => new(InputEventKind.MouseClick);
 

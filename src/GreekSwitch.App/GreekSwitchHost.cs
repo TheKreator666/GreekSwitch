@@ -67,7 +67,7 @@ internal sealed class GreekSwitchHost : IDisposable
         var session = new TypingSession(
             engine,
             new KeyClassifier(greek, english),
-            new Corrector(layouts, lang => lang == Lang.Greek ? greek : english, monitor.TypeAhead, monitor.Keyboard, logger)
+            new Corrector(layouts, lang => lang == Lang.Greek ? greek : english, monitor.TypeAhead, monitor.Keyboard, logger, monitor.Focus)
             {
                 SwitchSettle = TimeSpan.FromMilliseconds(Math.Clamp(settings.LayoutSwitchSettleMs, 0, 250)),
             },

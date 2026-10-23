@@ -3,30 +3,54 @@ using GreekSwitch.Core.Text;
 namespace GreekSwitch.Core.Decisions;
 
 /// <summary>
-/// Thread-safe in-memory never-convert list. The worker adds to it on undo, and the app reads a
-/// snapshot to save to settings.json (the only place words are stored, because the user put them there).
+/// Thread-safe never-convert list. Words the user types into Settings are kept as text so they
+/// can be edited. Words learned from undo are kept only as keyed hashes (see
+/// <see cref="INeverConvertList.Learn"/>). The app saves both to settings.json.
 /// </summary>
 public sealed class NeverConvertList : INeverConvertList
 {
     private readonly object _gate = new();
     private readonly Dictionary<string, string> _words = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _learned = new(StringComparer.Ordinal);
+    private readonly IWordHasher _hasher;
 
-    public NeverConvertList(IEnumerable<string>? words = null)
+    public NeverConvertList(IEnumerable<string>? words = null, IEnumerable<string>? learned = null, IWordHasher? hasher = null)
     {
+        _hasher = hasher ?? HmacWordHasher.Ephemeral();
         foreach (var word in words ?? [])
         {
             AddCore(word);
         }
+
+        _learned.UnionWith(learned ?? []);
     }
 
-    /// <summary>Raised after a word is added; handlers run on the adding thread.</summary>
+    /// <summary>Raised after a word is added or learned; handlers run on that thread.</summary>
     public event EventHandler? Changed;
+
+    public int LearnedCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _learned.Count;
+            }
+        }
+    }
 
     public bool Contains(string word)
     {
+        var key = Key(word);
+        if (key.Length == 0)
+        {
+            return false;
+        }
+
+        var hash = _hasher.Hash(key);
         lock (_gate)
         {
-            return _words.ContainsKey(Key(word));
+            return _words.ContainsKey(key) || _learned.Contains(hash);
         }
     }
 
@@ -44,7 +68,28 @@ public sealed class NeverConvertList : INeverConvertList
         }
     }
 
-    /// <summary>Replaces the whole list (the user edited it in Settings). Does not raise <see cref="Changed"/>.</summary>
+    public void Learn(string word)
+    {
+        var key = Key(word);
+        if (key.Length == 0)
+        {
+            return;
+        }
+
+        var hash = _hasher.Hash(key);
+        bool added;
+        lock (_gate)
+        {
+            added = _learned.Add(hash);
+        }
+
+        if (added)
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Replaces the user-entered words (edited in Settings). Does not raise <see cref="Changed"/>.</summary>
     public void ReplaceAll(IEnumerable<string> words)
     {
         lock (_gate)
@@ -57,12 +102,30 @@ public sealed class NeverConvertList : INeverConvertList
         }
     }
 
-    /// <summary>The words as first added, sorted.</summary>
+    /// <summary>Forgets every word learned from undo. Does not raise <see cref="Changed"/>.</summary>
+    public void ForgetLearned()
+    {
+        lock (_gate)
+        {
+            _learned.Clear();
+        }
+    }
+
+    /// <summary>The user-entered words as first added, sorted.</summary>
     public IReadOnlyList<string> Snapshot()
     {
         lock (_gate)
         {
             return [.. _words.Values.Order(StringComparer.CurrentCultureIgnoreCase)];
+        }
+    }
+
+    /// <summary>The learned words' hashes, for saving.</summary>
+    public IReadOnlyList<string> LearnedSnapshot()
+    {
+        lock (_gate)
+        {
+            return [.. _learned.Order(StringComparer.Ordinal)];
         }
     }
 

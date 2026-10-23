@@ -85,7 +85,8 @@ internal sealed class KeyboardHook : IDisposable
                                 Control: IsDown(VirtualKeys.Control),
                                 Alt: (data.flags & LLKHF_ALTDOWN) != 0 || IsDown(VirtualKeys.Menu),
                                 Win: IsDown(VirtualKeys.LWin) || IsDown(VirtualKeys.RWin)),
-                            typedCount));
+                            typedCount,
+                            Layouts.KeyboardLayouts.ForegroundLayout().FocusWindow));
                     }
                 }
             }

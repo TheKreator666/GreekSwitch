@@ -32,5 +32,7 @@ if [[ "$SKIP_PUBLISH" == false ]]; then
   # Code signing placeholder: sign publish/GreekSwitch.exe here (e.g. with osslsigncode on Linux
   # or signtool on Windows) once a certificate is available.
 
-  echo "==> done: publish/GreekSwitch.exe"
+  # The exe is unsigned: publish its SHA-256 so a copy can be checked.
+  (cd publish && sha256sum GreekSwitch.exe | tr 'a-f' 'A-F' | sed 's/ \*/  /' > GreekSwitch.exe.sha256)
+  echo "==> done: publish/GreekSwitch.exe (SHA-256 $(cut -d' ' -f1 publish/GreekSwitch.exe.sha256))"
 fi

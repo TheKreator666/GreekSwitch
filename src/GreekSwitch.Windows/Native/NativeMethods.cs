@@ -83,6 +83,9 @@ internal static partial class NativeMethods
     public static partial nint GetForegroundWindow();
 
     [LibraryImport("user32.dll")]
+    public static unsafe partial int GetClassNameW(nint hWnd, char* lpClassName, int nMaxCount);
+
+    [LibraryImport("user32.dll")]
     public static partial uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
     [LibraryImport("user32.dll", SetLastError = true)]
@@ -118,6 +121,9 @@ internal static partial class NativeMethods
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CloseHandle(nint hObject);
+
+    [LibraryImport("wer.dll", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int WerAddExcludedApplication(string pwzExeName, [MarshalAs(UnmanagedType.Bool)] bool bAllUsers);
 
     public static bool IsDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
 }

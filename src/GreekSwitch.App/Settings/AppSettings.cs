@@ -29,20 +29,36 @@ internal sealed class AppSettings
     /// <summary>Executables where GreekSwitch is fully passive. Matched case-insensitively.</summary>
     public List<string> ExcludedProcesses { get; set; } = [.. DefaultExcludedProcesses];
 
-    /// <summary>Words never to convert. Filled by undo, editable in Settings.</summary>
+    /// <summary>Words never to convert that the user typed into Settings (readable, editable).</summary>
     public List<string> NeverConvert { get; set; } = [];
+
+    /// <summary>
+    /// Words learned from undo, as HMAC-SHA256 hashes only: an undone "word" may be a password
+    /// typed into a box we couldn't recognise, so it is never stored as text.
+    /// </summary>
+    public List<string> NeverConvertLearned { get; set; } = [];
+
+    /// <summary>The HMAC key for <see cref="NeverConvertLearned"/>, encrypted with DPAPI for this Windows user.</summary>
+    public string? NeverConvertKey { get; set; }
 
     /// <summary>Debug builds only: log the words themselves. Ignored in Release builds.</summary>
     public bool DebugLogText { get; set; }
+
+    /// <summary>
+    /// Always excluded, whatever settings.json says, so nothing (including another program
+    /// editing the file) can switch GreekSwitch on inside a password manager.
+    /// </summary>
+    public static IReadOnlyList<string> AlwaysExcludedProcesses { get; } =
+    [
+        "KeePass.exe", "KeePassXC.exe", "1Password.exe", "Bitwarden.exe", "Dashlane.exe",
+        "NordPass.exe", "Enpass.exe", "RoboForm.exe", "LastPass.exe", "ProtonPass.exe",
+    ];
 
     public static IReadOnlyList<string> DefaultExcludedProcesses { get; } =
     [
         // Terminals and editors, where text is code or commands.
         "WindowsTerminal.exe", "OpenConsole.exe", "conhost.exe", "cmd.exe", "powershell.exe", "pwsh.exe",
         "mintty.exe", "putty.exe", "Code.exe", "devenv.exe", "rider64.exe", "idea64.exe", "nvim-qt.exe",
-
-        // Password managers.
-        "KeePass.exe", "KeePassXC.exe", "1Password.exe", "Bitwarden.exe",
 
         // Launchers and games (WASD and chat shortcuts are not words).
         "steam.exe", "steamwebhelper.exe", "EpicGamesLauncher.exe", "Battle.net.exe", "EADesktop.exe",

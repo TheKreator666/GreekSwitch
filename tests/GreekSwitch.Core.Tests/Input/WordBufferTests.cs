@@ -38,6 +38,43 @@ public class WordBufferTests
         buffer.Complete(Space).Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("reset")]
+    [InlineData("complete")]
+    [InlineData("pop")]
+    public void Keys_are_wiped_from_memory_not_just_forgotten(string how)
+    {
+        var buffer = new WordBuffer();
+        foreach (var c in "PASSWORDLIKE")
+        {
+            buffer.Append(K(c), Lang.English);
+        }
+
+        switch (how)
+        {
+            case "reset": buffer.Reset(); break;
+            case "complete": buffer.Complete(Space); break;
+            default: while (buffer.Pop()) { } break;
+        }
+
+        var backing = (KeyStroke[])typeof(WordBuffer)
+            .GetField("_keys", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .GetValue(buffer)!;
+        backing.Should().OnlyContain(k => k == default);
+    }
+
+    [Fact]
+    public void Buffer_grows_past_its_initial_size()
+    {
+        var buffer = new WordBuffer();
+        for (var i = 0; i < 100; i++)
+        {
+            buffer.Append(K('A'), Lang.English);
+        }
+
+        buffer.Complete(Space)!.Keys.Should().HaveCount(100);
+    }
+
     [Fact]
     public void Complete_returns_the_word_with_layout_and_delimiter_then_starts_fresh()
     {

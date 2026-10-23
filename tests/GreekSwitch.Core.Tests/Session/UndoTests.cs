@@ -37,7 +37,7 @@ public class UndoTests(LanguageDataFixture data)
         sim.TypeIn(Lang.English, "x").Backspace();
 
         sim.Screen.Should().Be("application ");
-        sim.NeverConvert.Snapshot().Should().BeEmpty();
+        sim.NeverConvert.LearnedCount.Should().Be(0);
     }
 
     [Fact]
@@ -48,6 +48,6 @@ public class UndoTests(LanguageDataFixture data)
         sim.Backspace();
 
         sim.Screen.Should().Be("application");
-        sim.NeverConvert.Snapshot().Should().BeEmpty();
+        sim.NeverConvert.LearnedCount.Should().Be(0);
     }
 }

@@ -50,9 +50,18 @@ jobs:
       - name: Sign executable (placeholder)
         run: echo "Code signing not configured; GreekSwitch.exe is unsigned."
 
+      - name: SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash publish/GreekSwitch.exe -Algorithm SHA256).Hash
+          Set-Content -Path publish/GreekSwitch.exe.sha256 -Value "$hash  GreekSwitch.exe" -Encoding ascii
+          "SHA-256: $hash" >> $env:GITHUB_STEP_SUMMARY
+
       - name: Upload GreekSwitch.exe
         uses: actions/upload-artifact@v4
         with:
           name: GreekSwitch
-          path: publish/GreekSwitch.exe
+          path: |
+            publish/GreekSwitch.exe
+            publish/GreekSwitch.exe.sha256
           if-no-files-found: error

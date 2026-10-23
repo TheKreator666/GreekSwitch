@@ -29,6 +29,9 @@ public sealed class InputMonitor : IDisposable
     /// <summary>Modifier and Caps Lock state, for retyping corrections with real keys.</summary>
     public LiveKeyboardState Keyboard { get; } = new();
 
+    /// <summary>Which control the key being processed was typed into.</summary>
+    public FocusGuard Focus { get; } = new();
+
     /// <summary>
     /// Test mode for end-to-end runs: also process keys injected by *other* programs (our own
     /// output stays ignored). The app turns it on only in Debug builds, behind an environment variable.
