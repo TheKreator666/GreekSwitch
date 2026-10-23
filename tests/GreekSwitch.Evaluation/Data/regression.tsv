@@ -41,6 +41,6 @@ KALHMERA	ΚΑΛΗΜΕΡΑ		all caps, conventionally unaccented
 καλη|mera	καληmera
 
 # Whole sentences in the wrong layout
-den θέλω να έρθω	δεν θέλω να έρθω	xfail	first word has no context yet (milestone 11)
+den u;elv na ;eruv	δεν θέλω να έρθω		whole sentence in the EN layout: 'den' has no context until 'u;elv' is corrected (milestone 11)
 τηε ψατ ις ον τηε ταβλε	the cat is on the table	xfail	"ον" is also Greek
 αππλιψατιον	application

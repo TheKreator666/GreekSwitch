@@ -8,6 +8,7 @@ page explains what it captures, what it doesn't, and why.
 | Captured | Why | Where it goes |
 |---|---|---|
 | Virtual-key code and Shift / Caps Lock / Ctrl / Alt / Win state of each **physical** key press | To re-read the current word in both layouts | An in-memory queue, then an in-memory word buffer. The buffer is **wiped** (overwritten, not just emptied) at every word boundary, click, focus change, caret key or shortcut. |
+| The keys of the last 1–3 completed words of the current run (same field, separated only by spaces) | So that after a confident correction the words just before it can be fixed too ("den θέλω" → "δεν θέλω") | Memory only. Wiped on any reset, punctuation, Enter/Tab, a Backspace into earlier text, or when a word leaves the 3-word window. |
 | Which control had keyboard focus for each key (a window handle) | So a correction is only typed into the control the word was typed into | Memory only |
 | That a mouse button was pressed (not where) | A click may move the caret, so the word is forgotten | Nowhere; it only clears the buffer |
 | The foreground app's executable name (e.g. `notepad.exe`) | To honour the exclusion list | Memory only |

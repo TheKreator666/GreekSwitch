@@ -52,6 +52,9 @@ correction (before any other key). That:
 3. remembers the word so it's left alone from now on. It stores only a keyed hash, never the
    text, in case the "word" was a password (see [SECURITY.md](SECURITY.md)).
 
+If the correction also fixed the words just before it (see *Earlier words* below), one
+Backspace reverts the whole batch and remembers each of those words.
+
 Type Space and carry on. To forget the learned words, use Settings → *Forget learned words*.
 Words you type into the Settings list yourself are kept as readable text. Any other key
 after a correction (or a click, arrow key, focus change and so on) disarms undo, and Backspace
@@ -115,6 +118,13 @@ The rules, in order:
    statistics alone.
 6. Otherwise **keep**.
 
+**Earlier words.** Context only exists once something has been corrected, so the first words
+of a sentence typed in the wrong layout would otherwise stay wrong (`den θέλω`). After a
+confident correction (dictionary evidence, or frequency plus context), the last 1–3 words of
+the same run (same field, separated only by spaces, no click or other reset in between) are
+judged again with the new context. The ones that now convert are fixed in the same batch:
+`den u;elv` → `δεν θέλω`. It stops at the first earlier word that stays as it is.
+
 A Greek replacement gets a final ς at the end of the word. To apply it, the corrector:
 
 1. posts `WM_INPUTLANGCHANGEREQUEST` to switch the foreground window to the target layout,
@@ -136,12 +146,11 @@ frequent words of each language, **weighted by how often they occur**:
 |---|---|---|
 | Typed correctly: wrongly changed | 0.01% | 0.00% |
 | Typed in the wrong layout: corrected, no context / with context | 69% / 87% | 73% / 90% |
-| Real sentences, wrong layout from a random word on: corrected / correct words changed | 83% / 0.04% | 83% / 0.43% |
+| Real sentences, wrong layout from a random word on: corrected / correct words changed | 87% / 0.04% | 86% / 0.43% |
 
 Latin words typed on purpose inside Greek (`email`, `pdf`, `Teams`, `tv`, `ai`): 0 of 118
-changed. What's left uncorrected is mostly the very first word of a sentence (no context yet),
-single letters, true ties such as `to`/`το`, and names that read as words in both languages
-(`Tom`/`Τομ`).
+changed. What's left uncorrected is mostly single letters, true ties such as `to`/`το`, and
+names that read as words in both languages (`Tom`/`Τομ`).
 
 ## Privacy
 

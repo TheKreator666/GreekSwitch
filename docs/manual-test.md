@@ -30,6 +30,16 @@ Tip: make the active layout visible in the taskbar, so you can see GreekSwitch s
 - [ ] `I love ελλάδα` (switching layouts yourself) stays unchanged.
 - [ ] End a wrong-layout word with `.` or `,`. The punctuation is kept after the corrected word.
 
+### Earlier words (milestone 11)
+
+- [ ] With the **English** layout active and nothing corrected yet, type `den u;elv na ;eruv `
+      (the keys of "δεν θέλω να έρθω"). It becomes `δεν θέλω να έρθω `, and the first word is
+      fixed at the same moment as the second.
+- [ ] Repeat, then press Backspace right after `θέλω` is fixed. **Both** words go back
+      (`den u;elv`), and the layout returns to English.
+- [ ] Type `den, u;elv `. Only `u;elv` is fixed: punctuation ends the run.
+- [ ] Type `den `, click elsewhere in the same line, type `u;elv `. Only `u;elv` is fixed.
+
 ## 2. Microsoft Word
 
 - [ ] Repeat the reference sentence. Corrections land correctly, and Word's own autocorrect

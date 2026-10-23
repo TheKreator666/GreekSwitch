@@ -1,11 +1,20 @@
 namespace GreekSwitch.Core.Decisions;
 
-/// <summary>What is needed to put a replaced word back.</summary>
-/// <param name="Original">The text that was on screen before the replacement.</param>
+/// <summary>What is needed to put a replacement (possibly a batch of several words) back.</summary>
+/// <param name="Original">The text that was on screen before the replacement, without the delimiter.</param>
 /// <param name="Replacement">The text the replacement typed, without the delimiter.</param>
-/// <param name="Keys">The word's keys, restored into the buffer after undo.</param>
+/// <param name="Keys">The last word's keys, restored into the buffer after undo.</param>
 /// <param name="OriginalLayout">The layout to switch back to.</param>
-public sealed record UndoRecord(string Original, string Replacement, IReadOnlyList<KeyStroke> Keys, Lang OriginalLayout);
+/// <param name="Words">
+/// Each converted word's original text, learned as never-convert on undo. Null means
+/// <see cref="Original"/> is a single word.
+/// </param>
+public sealed record UndoRecord(
+    string Original,
+    string Replacement,
+    IReadOnlyList<KeyStroke> Keys,
+    Lang OriginalLayout,
+    IReadOnlyList<string>? Words = null);
 
 /// <summary>
 /// Remembers the last replacement until the next key. A Backspace as that next key takes the

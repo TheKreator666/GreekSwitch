@@ -108,8 +108,8 @@ sentences per language. (An earlier Python port gave 0.03% / 68% / 70% / 72% / 8
 | Latin tokens inside Greek prose: wrongly changed (unweighted, 118 tokens) | 1.69% (`tv`, `ai`) | 0.00% |
 | Greek typed in the EN layout: corrected (no context / Greek context) | 67.7% / 70.1% | 69.0% / 87.3% |
 | English typed in the GR layout: corrected (no context / English context) | 71.8% / 84.5% | 73.1% / 89.6% |
-| Sentences, Greek: wrong-layout words corrected / correct words wrongly changed | 73.8% / 0.05% | 83.2% / 0.04% |
-| Sentences, English: wrong-layout words corrected / correct words wrongly changed | 78.5% / 0.43% | 83.2% / 0.43% (names: `Sami`, `Rima`) |
+| Sentences, Greek: wrong-layout words corrected / correct words wrongly changed | 73.8% / 0.05% | 83.2% / 0.04%; 86.6% after M11 |
+| Sentences, English: wrong-layout words corrected / correct words wrongly changed | 78.5% / 0.43% | 83.2% / 0.43% (names: `Sami`, `Rima`); 85.6% after M11 |
 
 Word-level rows type a name capitalised when its only dictionary entry is capitalised (from 10b
 on; the lowercase frequency lists otherwise overstate false positives).
