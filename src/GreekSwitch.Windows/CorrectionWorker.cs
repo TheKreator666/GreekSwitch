@@ -189,7 +189,8 @@ public sealed class CorrectionWorker
             _monitor.CaptureKeys = capture;
 
             // Categories only: never the app name or any text.
-            var reason = capture ? "" : !_policy.IsActive ? ": disabled or paused" : _excluded ? ": excluded app" : ": password field";
+            var reason = capture ? "" : !_policy.IsActive ? ": disabled or paused" : _excluded ? ": excluded app"
+                : _gate.Pending ? ": checking for a password field" : ": password field";
             _logger.LogInformation("Key capture {State}{Reason}", capture ? "on" : "off (passive)", reason);
         }
 

@@ -28,6 +28,9 @@ public sealed class PasswordGate
     /// <summary>True while a password box may have focus: capture must stay off.</summary>
     public bool Blocked { get; private set; } = true;
 
+    /// <summary>Blocked only because the answer for the current element hasn't arrived yet.</summary>
+    public bool Pending { get; private set; } = true;
+
     /// <summary>
     /// Focus moved to <paramref name="key"/>. Returns true if a UI Automation check must be
     /// started (the gate is then blocked until <see cref="OnAnswer"/>).
@@ -39,16 +42,19 @@ public sealed class PasswordGate
         if (!wouldCapture)
         {
             Blocked = false; // capture is off anyway; nothing to protect, nothing to query
+            Pending = false;
             return false;
         }
 
         if (key.ChildId == 0 && _cache.TryGetValue(key.Window, out var isPassword))
         {
             Blocked = isPassword;
+            Pending = false;
             return false;
         }
 
         Blocked = true;
+        Pending = true;
         return true;
     }
 
@@ -74,6 +80,7 @@ public sealed class PasswordGate
         }
 
         Blocked = check is not { IsPassword: false }; // a timeout keeps it closed
+        Pending = false;
         return true;
     }
 }

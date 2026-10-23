@@ -15,9 +15,11 @@ public class PasswordGateTests
 
         gate.OnFocus(Notepad, wouldCapture: true).Should().BeTrue("a check must be started");
         gate.Blocked.Should().BeTrue("fail closed while waiting");
+        gate.Pending.Should().BeTrue();
 
         gate.OnAnswer(Notepad, new PasswordCheck(false, Notepad.Window));
         gate.Blocked.Should().BeFalse();
+        gate.Pending.Should().BeFalse();
     }
 
     [Fact]
