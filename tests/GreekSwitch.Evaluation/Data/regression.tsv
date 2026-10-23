@@ -32,7 +32,7 @@ I don't know	I don't know
 απ' το σπίτι	απ' το σπίτι
 
 # Capitals
-Kalhm;era se ;oloys	Καλημέρα σε όλους	xfail	sentence-initial capital; "se" must not count as English because of "Se"
+Kalhm;era se ;oloys	Καλημέρα σε όλους		sentence-initial capital; "se" must not count as English because of "Se"
 KALHMERA	ΚΑΛΗΜΕΡΑ		all caps, conventionally unaccented
 ΗΕΛΛΟ ΤΗΕΡΕ	HELLO THERE		all-caps English typed in the GR layout
 

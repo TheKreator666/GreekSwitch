@@ -13,11 +13,17 @@ public static class Evaluator
 {
     public const int TopWords = 5000;
 
-    public static IReadOnlyList<Tally> Run(ILanguageData data) =>
-        [.. WordLevel(data), LatinInGreek(data), .. Sentences(data)];
+    /// <param name="data">The language data the engine under test uses.</param>
+    /// <param name="caseReference">
+    /// Decides how list words are capitalised (see <see cref="AsTyped"/>); fixed across runs so
+    /// before/after comparisons type the same text. Defaults to <paramref name="data"/>.
+    /// </param>
+    public static IReadOnlyList<Tally> Run(ILanguageData data, ILanguageData? caseReference = null) =>
+        [.. WordLevel(data, caseReference: caseReference), LatinInGreek(data), .. Sentences(data)];
 
-    public static IEnumerable<Tally> WordLevel(ILanguageData data, int top = TopWords)
+    public static IEnumerable<Tally> WordLevel(ILanguageData data, int top = TopWords, ILanguageData? caseReference = null)
     {
+        caseReference ??= data;
         var engine = EngineFactory.Create(data);
         foreach (var lang in new[] { Lang.Greek, Lang.English })
         {
@@ -26,8 +32,9 @@ public static class Evaluator
             var noContext = new Tally($"{Name(lang)} typed in the {other.Code()} layout, no context", "corrected");
             var context = new Tally($"{Name(lang)} typed in the {other.Code()} layout, {Name(lang)} context", "corrected");
 
-            foreach (var (word, zipf) in EvaluationData.Frequencies(lang, top))
+            foreach (var (listed, zipf) in EvaluationData.Frequencies(lang, top))
             {
+                var word = AsTyped(listed, lang, caseReference);
                 if (TryType(word, lang) is not { } keys)
                 {
                     continue;
@@ -118,6 +125,22 @@ public static class Evaluator
             yield return corrected;
             yield return changed;
         }
+    }
+
+    /// <summary>
+    /// Frequency lists are lowercase, but people capitalise names: a word whose only dictionary
+    /// entry is capitalised ("syria" → Syria, "τραμπ" stays: not in the dictionary at all) is
+    /// typed capitalised, as in running text.
+    /// </summary>
+    private static string AsTyped(string word, Lang lang, ILanguageData data)
+    {
+        if (word.Length == 0 || data.Dictionaries.IsWord(word, lang))
+        {
+            return word;
+        }
+
+        var capitalised = char.ToUpperInvariant(word[0]) + word[1..];
+        return data.Dictionaries.IsWord(capitalised, lang) ? capitalised : word;
     }
 
     private static void Score(Tally tally, Decision decision, string intended, double weight)

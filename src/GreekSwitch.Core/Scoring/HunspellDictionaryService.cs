@@ -67,8 +67,19 @@ public sealed class HunspellDictionaryService : IDictionaryService
         }
 
         var list = _english.Value;
+        if (list.Check(word))
+        {
+            return true;
+        }
+
+        // Lowercase input must match a lowercase entry: "na" is not a word just because "Na" is.
+        if (!HasUppercase(word))
+        {
+            return false;
+        }
+
         var lower = word.ToLowerInvariant();
-        return list.Check(word) || list.Check(lower) || list.Check(Capitalize(lower));
+        return list.Check(lower) || list.Check(Capitalize(lower));
     }
 
     private bool IsGreekWord(string word)
@@ -84,10 +95,13 @@ public sealed class HunspellDictionaryService : IDictionaryService
             return true;
         }
 
+        // Lowercase input only matches lowercase entries ("ελλάδα" isn't Ελλάδα); capitalised or
+        // all-caps input may also match a capitalised entry (names).
+        var allowCapitalised = HasUppercase(word);
         var bare = GreekText.FixFinalSigma(GreekText.NormalizeForMatch(word));
         foreach (var candidate in AccentVariants(bare))
         {
-            if (list.Check(candidate) || list.Check(Capitalize(candidate)))
+            if (list.Check(candidate) || (allowCapitalised && list.Check(Capitalize(candidate))))
             {
                 return true;
             }
@@ -95,6 +109,8 @@ public sealed class HunspellDictionaryService : IDictionaryService
 
         return false;
     }
+
+    private static bool HasUppercase(string word) => word.Any(char.IsUpper);
 
     /// <summary>The bare word, then each way to add one tonos and/or one dialytika.</summary>
     private static IEnumerable<string> AccentVariants(string bare)

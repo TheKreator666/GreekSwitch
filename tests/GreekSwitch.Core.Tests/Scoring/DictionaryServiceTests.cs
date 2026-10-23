@@ -15,7 +15,8 @@ public class DictionaryServiceTests(LanguageDataFixture data)
     [InlineData("Καλημέρα")]
     [InlineData("καλημέρά")]      // tonos on the wrong vowel still normalises to the same word
     [InlineData("πράξεισ")]       // final sigma typed with S
-    [InlineData("ελλάδα")]        // proper noun typed in lowercase
+    [InlineData("Ελλάδα")]        // proper noun, capitalised
+    [InlineData("ΕΛΛΑΔΑ")]        // proper noun, all caps
     [InlineData("θέλω")]
     [InlineData("να")]
     [InlineData("θα")]
@@ -47,10 +48,25 @@ public class DictionaryServiceTests(LanguageDataFixture data)
     [InlineData("HELLO")]
     [InlineData("the")]
     [InlineData("don't")]
-    [InlineData("london")]        // proper noun typed in lowercase
+    [InlineData("London")]        // proper noun, capitalised
+    [InlineData("LONDON")]
     public void English_accepts_words_in_any_case(string word)
     {
         _dictionaries.IsWord(word, Lang.English).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A lowercase reading must not match an entry that only exists capitalised: otherwise "na"
+    /// (Na, sodium) or "se" (Se) count as English and block "να", "σε".
+    /// </summary>
+    [Theory]
+    [InlineData("na", Lang.English)]
+    [InlineData("se", Lang.English)]
+    [InlineData("london", Lang.English)]
+    [InlineData("ελλάδα", Lang.Greek)]
+    public void Lowercase_input_does_not_match_capitalised_only_entries(string word, Lang lang)
+    {
+        _dictionaries.IsWord(word, lang).Should().BeFalse();
     }
 
     [Theory]

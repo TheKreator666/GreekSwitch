@@ -37,9 +37,24 @@ public class SentenceTests(LanguageDataFixture data, ITestOutputHelper output)
         sim.Screen.Should().Be(expected + " ");
     }
 
+    /// <summary>
+    /// Like <see cref="Sentences"/>, with names capitalised as people type them: a lowercase
+    /// "ελλάδα" typed in the wrong layout is deliberately not treated as the name Ελλάδα.
+    /// </summary>
+    public static TheoryData<string, string> SentencesAsTyped()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (var row in Sentences())
+        {
+            data.Add(((string)row[0]).Replace("ελλάδα", "Ελλάδα"), ((string)row[1]).Replace("ελλάδα", "Ελλάδα"));
+        }
+
+        return data;
+    }
+
     /// <summary>Real behaviour: after a correction, the switched layout applies to the next keys.</summary>
     [Theory]
-    [MemberData(nameof(Sentences))]
+    [MemberData(nameof(SentencesAsTyped))]
     public void Gives_the_same_text_when_layout_switches_take_effect(string typed, string expected)
     {
         var sim = new TypingSimulator(data, followLayoutSwitches: true).Type(typed + " ");
