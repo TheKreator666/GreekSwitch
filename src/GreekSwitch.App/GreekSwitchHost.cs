@@ -52,15 +52,15 @@ internal sealed class GreekSwitchHost : IDisposable
 
         var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams), neverConvert, ToScoring(settings));
         var layouts = new LayoutSwitcher(logger);
+        var monitor = new InputMonitor();
         var session = new TypingSession(
             engine,
             new KeyClassifier(greek, english),
-            new Corrector(layouts, logger),
+            new Corrector(layouts, monitor.TypeAhead, logger),
             neverConvert,
             logger,
             ToSession(settings));
 
-        var monitor = new InputMonitor();
         try
         {
             await monitor.StartAsync().ConfigureAwait(true);

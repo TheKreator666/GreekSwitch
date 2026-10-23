@@ -13,9 +13,10 @@ public enum InputEventKind
 }
 
 /// <summary>What the hook thread hands to the worker. Small, allocation-free, enqueued in microseconds.</summary>
-public readonly record struct InputEvent(InputEventKind Kind, KeyInput Key = default, nint Window = 0, string? ErrorType = null)
+public readonly record struct InputEvent(InputEventKind Kind, KeyInput Key = default, nint Window = 0, string? ErrorType = null, long TypedCount = 0)
 {
-    public static InputEvent ForKey(KeyInput key) => new(InputEventKind.Key, key);
+    /// <param name="typedCount">TypeAheadGuard count when the key was captured.</param>
+    public static InputEvent ForKey(KeyInput key, long typedCount) => new(InputEventKind.Key, key, TypedCount: typedCount);
 
     public static InputEvent Click() => new(InputEventKind.MouseClick);
 

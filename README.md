@@ -123,9 +123,11 @@ text. A unit test enforces this.
 
 ## Known limitations
 
-- **Typing very fast right after a correction.** Keys that land while the correction is being
-  sent can interleave with it. The layout switch is asynchronous, so a key or two may still come
-  out in the old layout.
+- **Typing very fast right after a word.** A correction switches the layout first and waits
+  (up to 300 ms, usually a few ms) until the app has applied it. Apps such as Windows 11 Notepad
+  turn injected text the active layout can't type into spaces. If you type another letter
+  before the correction is sent, the correction is skipped (and logged) so its Backspaces can't
+  delete your new letters. The word then stays as typed.
 - **Elevated windows** (run as administrator) can't receive input from a non-elevated
   GreekSwitch (Windows UIPI). The correction is skipped and logged. Run GreekSwitch elevated if
   you need it there.

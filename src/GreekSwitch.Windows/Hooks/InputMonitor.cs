@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using GreekSwitch.Windows.Native;
+using GreekSwitch.Windows.Output;
 using static GreekSwitch.Windows.Native.NativeMethods;
 
 namespace GreekSwitch.Windows.Hooks;
@@ -21,6 +22,9 @@ public sealed class InputMonitor : IDisposable
     private int _disposed;
 
     public ChannelReader<InputEvent> Events => _channel.Reader;
+
+    /// <summary>Counts captured typing keys so the corrector can tell when the user has typed ahead.</summary>
+    public TypeAheadGuard TypeAhead { get; } = new();
 
     /// <summary>
     /// When false the keyboard hook enqueues nothing at all (disabled, paused, password field,
@@ -70,7 +74,7 @@ public sealed class InputMonitor : IDisposable
 
     private void Run()
     {
-        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys);
+        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead);
         using var mouse = new MouseHook(_channel.Writer);
         using var focus = new FocusWatcher(_channel.Writer);
         try

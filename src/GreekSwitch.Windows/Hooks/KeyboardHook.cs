@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using GreekSwitch.Core.Input;
 using GreekSwitch.Core.Layout;
 using GreekSwitch.Windows.Native;
+using GreekSwitch.Windows.Output;
 using static GreekSwitch.Windows.Native.NativeMethods;
 
 namespace GreekSwitch.Windows.Hooks;
@@ -17,14 +18,16 @@ internal sealed class KeyboardHook : IDisposable
 {
     private readonly ChannelWriter<InputEvent> _writer;
     private readonly Func<bool> _captureKeys;
+    private readonly TypeAheadGuard _typeAhead;
     private readonly HookProc _proc; // kept in a field so the GC can't collect the callback
     private nint _hook;
     private bool _capsLock;
 
-    public KeyboardHook(ChannelWriter<InputEvent> writer, Func<bool> captureKeys)
+    public KeyboardHook(ChannelWriter<InputEvent> writer, Func<bool> captureKeys, TypeAheadGuard typeAhead)
     {
         _writer = writer;
         _captureKeys = captureKeys;
+        _typeAhead = typeAhead;
         _proc = Callback;
     }
 
@@ -65,13 +68,16 @@ internal sealed class KeyboardHook : IDisposable
 
                     if (_captureKeys())
                     {
-                        _writer.TryWrite(InputEvent.ForKey(new KeyInput(
-                            vk,
-                            Shift: IsDown(VirtualKeys.Shift),
-                            CapsLock: _capsLock,
-                            Control: IsDown(VirtualKeys.Control),
-                            Alt: (data.flags & LLKHF_ALTDOWN) != 0 || IsDown(VirtualKeys.Menu),
-                            Win: IsDown(VirtualKeys.LWin) || IsDown(VirtualKeys.RWin))));
+                        var typedCount = _typeAhead.OnKeyCaptured(isTypingKey: !VirtualKeys.IsModifier(vk));
+                        _writer.TryWrite(InputEvent.ForKey(
+                            new KeyInput(
+                                vk,
+                                Shift: IsDown(VirtualKeys.Shift),
+                                CapsLock: _capsLock,
+                                Control: IsDown(VirtualKeys.Control),
+                                Alt: (data.flags & LLKHF_ALTDOWN) != 0 || IsDown(VirtualKeys.Menu),
+                                Win: IsDown(VirtualKeys.LWin) || IsDown(VirtualKeys.RWin)),
+                            typedCount));
                     }
                 }
             }

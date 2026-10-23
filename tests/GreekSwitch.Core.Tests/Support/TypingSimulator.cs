@@ -112,22 +112,20 @@ public sealed class TypingSimulator : ICorrectionOutput
         return this;
     }
 
-    public bool ReplaceText(int backspaces, string text)
+    public bool Replace(int backspaces, string text, Lang layout)
     {
         _committed.Append(_decoder.Decode(_pending, ActiveLayout));
         _pending.Clear();
-        _committed.Remove(_committed.Length - backspaces, backspaces).Append(text);
-        Replacements++;
-        return true;
-    }
 
-    public void SwitchLayout(Lang layout)
-    {
         LayoutSwitches.Add(layout);
         if (_followLayoutSwitches)
         {
             ActiveLayout = layout;
         }
+
+        _committed.Remove(_committed.Length - backspaces, backspaces).Append(text);
+        Replacements++;
+        return true;
     }
 
     private static KeyInput DelimiterKey(char c) => c switch

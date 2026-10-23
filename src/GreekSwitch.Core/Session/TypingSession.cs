@@ -101,13 +101,12 @@ public sealed class TypingSession
             return;
         }
 
-        if (!_output.ReplaceText(replace.Original.Length + delimiter.Text.Length, replace.Text + delimiter.Text))
+        if (!_output.Replace(replace.Original.Length + delimiter.Text.Length, replace.Text + delimiter.Text, replace.TargetLayout))
         {
             _logger.LogInformation("Replacement not applied, lang {From}→{To}", replace.SourceLayout.Code(), replace.TargetLayout.Code());
             return;
         }
 
-        _output.SwitchLayout(replace.TargetLayout);
         _undo.Arm(new UndoRecord(replace.Original, replace.Text, word.Keys, replace.SourceLayout));
 
         _logger.LogInformation(
@@ -125,12 +124,12 @@ public sealed class TypingSession
     }
 
     /// <summary>
-    /// The user's Backspace has already deleted the delimiter, so delete the replacement, type
-    /// the original back, switch the layout back, and remember never to convert this word.
+    /// The user's Backspace has already deleted the delimiter, so switch the layout back, delete
+    /// the replacement, type the original back, and remember never to convert this word.
     /// </summary>
     private void Revert(UndoRecord undo)
     {
-        if (!_output.ReplaceText(undo.Replacement.Length, undo.Original))
+        if (!_output.Replace(undo.Replacement.Length, undo.Original, undo.OriginalLayout))
         {
             // The user's Backspace still deleted the delimiter; carry on as an ordinary Backspace.
             _logger.LogInformation("Undo not applied");
@@ -138,7 +137,6 @@ public sealed class TypingSession
             return;
         }
 
-        _output.SwitchLayout(undo.OriginalLayout);
         _neverConvert.Add(Scorer.LexicalCore(undo.Original));
         _buffer.Restore(undo.Keys, undo.OriginalLayout);
 
