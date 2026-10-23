@@ -51,6 +51,8 @@ public static class Typist
         }
 
         plain.TryAdd(' ', [new KeyStroke(VirtualKeys.Space)]);
+        plain.TryAdd('\n', [new KeyStroke(VirtualKeys.Return)]);
+        plain.TryAdd('\t', [new KeyStroke(VirtualKeys.Tab)]);
         return plain;
 
         void Register(char c, bool isDead, KeyStroke stroke)
