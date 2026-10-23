@@ -6,4 +6,21 @@
     <RootNamespace>GreekSwitch.Core</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="WeCantSpell.Hunspell" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <!-- Dictionaries and trigram models are embedded so the published exe is a true single file. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\data\dictionaries\*.dic;..\..\data\dictionaries\*.aff"
+                      LogicalName="GreekSwitch.dictionaries.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\data\ngrams\*.tri"
+                      LogicalName="GreekSwitch.ngrams.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GreekSwitch.Core.Tests" />
+  </ItemGroup>
+
 </Project>
