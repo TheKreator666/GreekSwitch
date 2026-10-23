@@ -283,6 +283,17 @@ public class CorrectorTests
     }
 
     [Fact]
+    public void Turning_caps_lock_off_presses_caps_lock_only_when_it_is_on()
+    {
+        Create().TurnOffCapsLock();
+        _sender.Batches.Should().BeEmpty();
+
+        _keyboard.CapsLockOn = true;
+        Create().TurnOffCapsLock();
+        _sender.Batches.Single().Select(i => i.U.ki.wVk).Should().Equal((ushort)VirtualKeys.Capital, (ushort)VirtualKeys.Capital);
+    }
+
+    [Fact]
     public void Reports_failure_when_SendInput_is_blocked()
     {
         _sender.Blocked = true;

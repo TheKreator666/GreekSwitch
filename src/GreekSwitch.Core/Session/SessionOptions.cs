@@ -9,6 +9,12 @@ public sealed record SessionOptions
     public bool CorrectOnEnterAndTab { get; init; }
 
     /// <summary>
+    /// The app's registered hotkeys. Their keys reach the hook before Windows turns them into a
+    /// hotkey message; they must not reset the word they are meant to convert.
+    /// </summary>
+    public IReadOnlyList<Input.KeyChord> HotkeyChords { get; init; } = [];
+
+    /// <summary>
     /// Debug builds only: include the words themselves in debug log events. Ignored, and
     /// compiled out, in Release builds.
     /// </summary>

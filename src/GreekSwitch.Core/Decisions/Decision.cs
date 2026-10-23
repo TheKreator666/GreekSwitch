@@ -34,6 +34,12 @@ public enum ReplaceReason
 
     /// <summary>Both readings are words; context favours the other language and it is far more frequent.</summary>
     FrequencyInContext,
+
+    /// <summary>The user converted these keys by hotkey before (learned, hashed).</summary>
+    UserChoice,
+
+    /// <summary>Typed with Caps Lock on by accident ("hELLO"): fix the case and turn Caps Lock off.</summary>
+    AccidentalCapsLock,
 }
 
 /// <summary>Outcome of evaluating one completed word.</summary>
@@ -43,4 +49,5 @@ public abstract record Decision;
 public sealed record Keep(KeepReason Reason) : Decision;
 
 /// <summary>Replace <see cref="Original"/> (what is on screen) with <see cref="Text"/> and switch to <see cref="TargetLayout"/>.</summary>
-public sealed record Replace(string Original, string Text, Lang SourceLayout, Lang TargetLayout, ReplaceReason Reason) : Decision;
+/// <param name="TurnOffCapsLock">Also turn Caps Lock off afterwards (accidental Caps Lock).</param>
+public sealed record Replace(string Original, string Text, Lang SourceLayout, Lang TargetLayout, ReplaceReason Reason, bool TurnOffCapsLock = false) : Decision;

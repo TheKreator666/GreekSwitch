@@ -89,6 +89,27 @@ public sealed class NeverConvertList : INeverConvertList
         }
     }
 
+    public void Forget(string word)
+    {
+        var key = Key(word);
+        if (key.Length == 0)
+        {
+            return;
+        }
+
+        var hash = _hasher.Hash(key);
+        bool removed;
+        lock (_gate)
+        {
+            removed = _learned.Remove(hash);
+        }
+
+        if (removed)
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     /// <summary>Replaces the user-entered words (edited in Settings). Does not raise <see cref="Changed"/>.</summary>
     public void ReplaceAll(IEnumerable<string> words)
     {

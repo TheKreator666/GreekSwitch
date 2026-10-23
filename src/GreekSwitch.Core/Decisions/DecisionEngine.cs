@@ -19,14 +19,17 @@ public sealed class DecisionEngine
     private readonly DualDecoder _decoder;
     private readonly Scorer _scorer;
     private readonly INeverConvertList _neverConvert;
+    private readonly INeverConvertList _alwaysConvert;
     private readonly ContextTracker _context = new();
     private volatile ScoringOptions _options;
 
-    public DecisionEngine(DualDecoder decoder, Scorer scorer, INeverConvertList neverConvert, ScoringOptions? options = null)
+    /// <param name="alwaysConvert">Words the user converted by hotkey: converted automatically from then on.</param>
+    public DecisionEngine(DualDecoder decoder, Scorer scorer, INeverConvertList neverConvert, ScoringOptions? options = null, INeverConvertList? alwaysConvert = null)
     {
         _decoder = decoder;
         _scorer = scorer;
         _neverConvert = neverConvert;
+        _alwaysConvert = alwaysConvert ?? new NeverConvertList();
         _options = options ?? new ScoringOptions();
     }
 
@@ -89,6 +92,17 @@ public sealed class DecisionEngine
         var current = _decoder.Decode(keys, currentLayout);
         var alternative = _decoder.Decode(keys, alternativeLayout);
 
+        // Accidental Caps Lock (optional): "hELLO" typed with Caps Lock on means "Hello".
+        if (options.FixAccidentalCapsLock && IsAccidentalCapsLock(keys, current))
+        {
+            if (record)
+            {
+                context.Record(currentLayout, options.ContextWindow);
+            }
+
+            return new Replace(current, InvertCase(current), currentLayout, currentLayout, ReplaceReason.AccidentalCapsLock, TurnOffCapsLock: true);
+        }
+
         // Rule 1: code, URLs, identifiers.
         if (followsPeriod || IsCodeLike(keys, current, alternative))
         {
@@ -99,6 +113,12 @@ public sealed class DecisionEngine
         if (_neverConvert.Contains(Scorer.LexicalCore(current)) || _neverConvert.Contains(Scorer.LexicalCore(alternative)))
         {
             return new Keep(KeepReason.NeverConvert);
+        }
+
+        // Rule 2b: the user converted these keys by hotkey before.
+        if (_alwaysConvert.Contains(Scorer.LexicalCore(current)))
+        {
+            return Accept(current, alternative, currentLayout, ReplaceReason.UserChoice, context, record);
         }
 
         var currentScore = _scorer.Score(current, currentLayout, context, options);
@@ -160,6 +180,17 @@ public sealed class DecisionEngine
 
         return !current.Any(char.IsLetter) || (IsCamelCase(current) && IsCamelCase(alternative));
     }
+
+    /// <summary>Every key typed with Caps Lock on, and the result is "hELLO": first letter lower, all others upper.</summary>
+    private static bool IsAccidentalCapsLock(IReadOnlyList<KeyStroke> keys, string current)
+    {
+        var letters = current.Where(char.IsLetter).ToList();
+        return keys.All(k => k.CapsLock) && letters.Count >= 2
+            && char.IsLower(letters[0]) && letters.Skip(1).All(char.IsUpper);
+    }
+
+    private static string InvertCase(string text) =>
+        string.Concat(text.Select(c => char.IsUpper(c) ? char.ToLowerInvariant(c) : char.IsLower(c) ? char.ToUpperInvariant(c) : c));
 
     private static bool IsCamelCase(string text)
     {

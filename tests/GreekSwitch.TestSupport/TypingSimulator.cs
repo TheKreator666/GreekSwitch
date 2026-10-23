@@ -39,15 +39,17 @@ public sealed class TypingSimulator : ICorrectionOutput
     {
         _followLayoutSwitches = followLayoutSwitches;
         NeverConvert = new NeverConvertList(neverConvert);
+        AlwaysConvert = new NeverConvertList();
         Logger = new CapturingLogger();
-        Engine = EngineFactory.Create(data, NeverConvert, scoring);
+        Engine = EngineFactory.Create(data, NeverConvert, scoring, AlwaysConvert);
         Session = new TypingSession(
             Engine,
             new KeyClassifier(StaticLayouts.Greek, StaticLayouts.English),
             this,
             NeverConvert,
             Logger,
-            session);
+            session,
+            AlwaysConvert);
     }
 
     public TypingSession Session { get; }
@@ -55,6 +57,11 @@ public sealed class TypingSimulator : ICorrectionOutput
     public DecisionEngine Engine { get; }
 
     public NeverConvertList NeverConvert { get; }
+
+    /// <summary>Words the user converted by hotkey (learned, hashed).</summary>
+    public NeverConvertList AlwaysConvert { get; }
+
+    public bool CapsLockTurnedOff { get; private set; }
 
     public CapturingLogger Logger { get; }
 
@@ -92,17 +99,22 @@ public sealed class TypingSimulator : ICorrectionOutput
     }
 
     /// <summary>Types the keys of <paramref name="text"/> on <paramref name="layout"/> with that layout active.</summary>
-    public TypingSimulator TypeIn(Lang layout, string text)
+    public TypingSimulator TypeIn(Lang layout, string text, bool capsLock = false)
     {
         ActiveLayout = layout;
         _started = true;
-        foreach (var key in Typist.Type(text, layout))
+        var keys = capsLock
+            ? KeyPlanner.Plan(text, StaticLayouts.For(layout), capsLock: true) ?? throw new ArgumentException("Can't type that with Caps Lock on.", nameof(text))
+            : Typist.Type(text, layout);
+        foreach (var key in keys)
         {
             Press(new KeyInput(key.VirtualKey, key.Shift, key.CapsLock));
         }
 
         return this;
     }
+
+    public void TurnOffCapsLock() => CapsLockTurnedOff = true;
 
     /// <summary>
     /// Types the keys a <paramref name="intended"/>-language typist presses for <paramref name="text"/>,
@@ -231,7 +243,9 @@ public sealed class TypingSimulator : ICorrectionOutput
 
     private void ApplyToScreen(KeyInput key)
     {
-        if (VirtualKeys.IsModifier(key.VirtualKey))
+        // Modifiers alone, and shortcuts (Ctrl/Alt/Win combos, including our own hotkeys, which
+        // Windows consumes), don't type anything.
+        if (VirtualKeys.IsModifier(key.VirtualKey) || key.Control || key.Alt || key.Win)
         {
             return;
         }

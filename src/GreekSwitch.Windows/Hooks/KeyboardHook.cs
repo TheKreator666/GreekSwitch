@@ -75,16 +75,20 @@ internal sealed class KeyboardHook : IDisposable
             if (nCode == HC_ACTION && wParam is WM_KEYDOWN or WM_SYSKEYDOWN)
             {
                 var data = *(KBDLLHOOKSTRUCT*)lParam;
+                var vk = (int)data.vkCode;
+
+                // Caps Lock really toggles whoever presses it (including our own fix for an
+                // accidental Caps Lock), so track every press.
+                if (vk == VirtualKeys.Capital)
+                {
+                    _capsLock = !_capsLock;
+                    _keyboard.SetCapsLock(_capsLock);
+                }
+
                 // Never our own output; other injected input only in the opt-in Debug test mode.
                 var injected = (data.flags & LLKHF_INJECTED) != 0;
                 if (!injected || (_acceptForeignInjected && data.dwExtraInfo != InputBuilder.Signature))
                 {
-                    var vk = (int)data.vkCode;
-                    if (vk == VirtualKeys.Capital)
-                    {
-                        _capsLock = !_capsLock;
-                        _keyboard.SetCapsLock(_capsLock);
-                    }
 
                     if (_captureKeys())
                     {

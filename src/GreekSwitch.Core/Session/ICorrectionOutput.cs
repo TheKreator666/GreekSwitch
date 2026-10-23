@@ -16,4 +16,7 @@ public interface ICorrectionOutput
     /// </remarks>
     /// <returns>False if nothing was typed (e.g. a modifier was held, input was blocked, or the user typed ahead).</returns>
     bool Replace(string before, string after, Lang layout);
+
+    /// <summary>Turns Caps Lock off (after fixing an accidental Caps Lock word).</summary>
+    void TurnOffCapsLock();
 }

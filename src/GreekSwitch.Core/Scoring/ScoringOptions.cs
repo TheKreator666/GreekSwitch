@@ -34,6 +34,12 @@ public sealed record ScoringOptions
     /// </summary>
     public double ShortWordMinZipf { get; init; } = 5.0;
 
+    /// <summary>
+    /// Fix words typed with Caps Lock on by accident ("hELLO" → "Hello") and turn Caps Lock off.
+    /// Off by default.
+    /// </summary>
+    public bool FixAccidentalCapsLock { get; init; }
+
     /// <summary>Words with fewer keys are left alone unless the dictionary and context both say otherwise.</summary>
     public int MinLength { get; init; } = 3;
 }

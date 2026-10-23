@@ -13,12 +13,15 @@ public class NoTextInLogsTests(LanguageDataFixture data)
 
         var sim = new TypingSimulator(data).Type(typed + " ");
         sim.TypeIn(Lang.Greek, "τηινγ ").Backspace(); // a replacement, then an undo
+        sim.TypeIn(Lang.English, " den ");             // kept, then converted by hotkey, then undone
+        sim.Session.ConvertLastWord();
+        sim.Backspace();
         sim.Replacements.Should().BeGreaterThan(3, "the run must exercise the replacement and undo log paths");
 
         var log = sim.Logger.AllOutput;
-        log.Should().Contain("Replacement made").And.Contain("reverted");
+        log.Should().Contain("Replacement made").And.Contain("reverted").And.Contain("converted by hotkey");
 
-        var words = typed.Split(' ', '@', '.').Concat(produced).Append("τηινγ").Append("thing")
+        var words = typed.Split(' ', '@', '.').Concat(produced).Append("τηινγ").Append("thing").Append("den").Append("δεν")
             .Where(w => w.Length >= 2);
         foreach (var word in words)
         {

@@ -35,6 +35,13 @@ public sealed class WordBuffer
 
     public bool IsEmpty => _count == 0;
 
+    /// <summary>Layout active at the first key of the current word.</summary>
+    public Lang Layout => _layout;
+
+    public bool IsTainted => _tainted;
+
+    public bool IsMixedLayout => _mixedLayout;
+
     public void Append(KeyStroke key, Lang activeLayout)
     {
         if (_count == 0)

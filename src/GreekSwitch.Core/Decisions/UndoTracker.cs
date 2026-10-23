@@ -9,12 +9,19 @@ namespace GreekSwitch.Core.Decisions;
 /// Each converted word's original text, learned as never-convert on undo. Null means
 /// <see cref="Original"/> is a single word.
 /// </param>
+/// <param name="ByHotkey">
+/// The user converted it by hotkey. Undo then learns nothing, and instead forgets what the
+/// conversion taught (<see cref="Taught"/> in the always- or never-convert list).
+/// </param>
 public sealed record UndoRecord(
     string Original,
     string Replacement,
     IReadOnlyList<KeyStroke> Keys,
     Lang OriginalLayout,
-    IReadOnlyList<string>? Words = null);
+    IReadOnlyList<string>? Words = null,
+    bool ByHotkey = false,
+    string? Taught = null,
+    bool TaughtAlways = false);
 
 /// <summary>
 /// Remembers the last replacement until the next key. A Backspace as that next key takes the

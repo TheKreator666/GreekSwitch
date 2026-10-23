@@ -13,4 +13,7 @@ public interface INeverConvertList
     /// box we couldn't recognise as one, so it is kept only as a keyed hash and never as text.
     /// </summary>
     void Learn(string word);
+
+    /// <summary>Forgets a word learned with <see cref="Learn"/> (e.g. the user undid the action that taught it).</summary>
+    void Forget(string word);
 }

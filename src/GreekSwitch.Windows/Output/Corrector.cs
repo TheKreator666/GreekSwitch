@@ -165,6 +165,20 @@ public sealed class Corrector : ICorrectionOutput
         return true;
     }
 
+    public void TurnOffCapsLock()
+    {
+        if (!_keyboard.CapsLockOn)
+        {
+            return;
+        }
+
+        var inputs = InputBuilder.Chord([VirtualKeys.Capital]);
+        if (_sender.Send(inputs) != inputs.Length)
+        {
+            _logger.LogWarning("Caps Lock could not be turned off");
+        }
+    }
+
     private bool EnsureLayout(Lang layout)
     {
         if (_layouts.CurrentLayout() == layout)
