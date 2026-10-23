@@ -8,6 +8,7 @@
     <RootNamespace>GreekSwitch.App</RootNamespace>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <ApplicationIcon>greekswitch.ico</ApplicationIcon>
     <Product>GreekSwitch</Product>
     <Description>Greek/English keyboard layout auto-corrector</Description>
   </PropertyGroup>

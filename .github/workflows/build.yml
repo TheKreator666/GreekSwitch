@@ -1,0 +1,58 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore GreekSwitch.sln
+
+      - name: Build
+        run: dotnet build GreekSwitch.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test GreekSwitch.sln -c Release --no-build --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+
+      - name: Publish single-file exe
+        run: >
+          dotnet publish src/GreekSwitch.App -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true -o publish
+
+      # Placeholder: code signing. Store the certificate as a secret and sign here, e.g.
+      #   signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f cert.pfx /p ${{ secrets.CERT_PASSWORD }} publish/GreekSwitch.exe
+      - name: Sign executable (placeholder)
+        run: echo "Code signing not configured; GreekSwitch.exe is unsigned."
+
+      - name: Upload GreekSwitch.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: GreekSwitch
+          path: publish/GreekSwitch.exe
+          if-no-files-found: error
