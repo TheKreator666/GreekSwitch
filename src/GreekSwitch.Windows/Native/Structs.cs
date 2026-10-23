@@ -106,4 +106,11 @@ public struct INPUT
     public InputUnion U;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public struct LASTINPUTINFO
+{
+    public uint cbSize;
+    public uint dwTime;
+}
+
 #pragma warning restore SA1307, IDE1006, CA1051

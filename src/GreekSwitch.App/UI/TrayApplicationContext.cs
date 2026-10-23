@@ -20,6 +20,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _pauseTimer = new() { Interval = 1000 };
     private readonly Icon _activeIcon = IconFactory.Create(active: true);
     private readonly Icon _inactiveIcon = IconFactory.Create(active: false);
+    private readonly Icon _errorIcon = IconFactory.Create(active: false, error: true);
+    private SessionEventsWindow? _sessionEvents;
     private AppSettings _settings;
     private GreekSwitchHost? _host;
     private SettingsForm? _settingsForm;
@@ -81,6 +83,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _pauseTimer.Dispose();
             _activeIcon.Dispose();
             _inactiveIcon.Dispose();
+            _errorIcon.Dispose();
+            _sessionEvents?.Dispose();
             _settingsForm?.Dispose();
         }
 
@@ -92,6 +96,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         try
         {
             _host = await GreekSwitchHost.StartAsync(_settings, _policy, _neverConvert, _logger).ConfigureAwait(true);
+            _host.HealthChanged += (_, _) => _ui.Post(_ => UpdateUi(), null);
+            _sessionEvents = new SessionEventsWindow(change => _host?.NotifySessionChange(change));
             UpdateUi();
         }
 #pragma warning disable CA1031 // shown to the user and logged; the app cannot run without its hooks
@@ -187,8 +193,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _pauseItem.Enabled = _settings.Enabled;
         var remaining = _policy.PausedUntilUtc - DateTime.UtcNow;
         _pauseItem.Text = _policy.IsPaused ? $"&Resume (paused, {remaining:m\\:ss} left)" : "&Pause for 5 min";
-        _tray.Icon = _host is not null && _policy.IsActive ? _activeIcon : _inactiveIcon;
+        var failed = _host?.Health == HostHealth.Failed;
+        _tray.Icon = failed ? _errorIcon : _host is not null && _policy.IsActive ? _activeIcon : _inactiveIcon;
         _tray.Text = _host is null ? "GreekSwitch: loading…"
+            : failed ? "GreekSwitch: error, see the log"
+            : _host.Health == HostHealth.Recovering ? "GreekSwitch: recovering…"
             : !_settings.Enabled ? "GreekSwitch: disabled"
             : _policy.IsPaused ? "GreekSwitch: paused"
             : "GreekSwitch: on";

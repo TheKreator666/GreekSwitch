@@ -5,24 +5,25 @@ using System.Drawing.Text;
 namespace GreekSwitch.App.UI;
 
 /// <summary>
-/// Draws the tray icon ("αb" on a rounded square: blue when active, grey when off or paused) and
+/// Draws the tray icon ("αb" on a rounded square: blue when active, grey when off or paused, red
+/// when something is wrong) and
 /// packs it into a multi-size .ico in memory, so no handles leak and no image files are needed.
 /// </summary>
 internal static class IconFactory
 {
     private static readonly int[] Sizes = [16, 20, 24, 32, 48, 256];
 
-    public static Icon Create(bool active)
+    public static Icon Create(bool active, bool error = false)
     {
         using var stream = new MemoryStream();
-        WriteIco(stream, active);
+        WriteIco(stream, active, error);
         stream.Position = 0;
         return new Icon(stream);
     }
 
-    public static void WriteIco(Stream output, bool active)
+    public static void WriteIco(Stream output, bool active, bool error = false)
     {
-        var images = Sizes.Select(size => (size, png: RenderPng(size, active))).ToList();
+        var images = Sizes.Select(size => (size, png: RenderPng(size, active, error))).ToList();
         using var writer = new BinaryWriter(output, System.Text.Encoding.UTF8, leaveOpen: true);
 
         // ICONDIR, then one ICONDIRENTRY per size, then PNG payloads (supported since Vista).
@@ -49,7 +50,7 @@ internal static class IconFactory
         }
     }
 
-    private static byte[] RenderPng(int size, bool active)
+    private static byte[] RenderPng(int size, bool active, bool error)
     {
         using var bitmap = new Bitmap(size, size, PixelFormat.Format32bppArgb);
         using (var g = Graphics.FromImage(bitmap))
@@ -65,7 +66,8 @@ internal static class IconFactory
             path.AddArc(size - (radius * 2) - 1, size - (radius * 2) - 1, radius * 2, radius * 2, 0, 90);
             path.AddArc(0, size - (radius * 2) - 1, radius * 2, radius * 2, 90, 90);
             path.CloseFigure();
-            using var fill = new SolidBrush(active ? Color.FromArgb(0x0D, 0x5E, 0xAF) : Color.FromArgb(0x80, 0x80, 0x80));
+            var color = error ? Color.FromArgb(0xC4, 0x2B, 0x1C) : active ? Color.FromArgb(0x0D, 0x5E, 0xAF) : Color.FromArgb(0x80, 0x80, 0x80);
+            using var fill = new SolidBrush(color);
             g.FillPath(fill, path);
 
             using var font = new Font("Segoe UI", size * 0.5f, FontStyle.Bold, GraphicsUnit.Pixel);

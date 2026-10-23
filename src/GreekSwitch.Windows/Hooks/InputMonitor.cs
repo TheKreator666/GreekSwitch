@@ -20,6 +20,9 @@ public sealed class InputMonitor : IDisposable
     private uint _threadId;
     private volatile bool _captureKeys;
     private long _droppedKeys;
+    private int _reinstalls;
+
+    private const uint WmReinstall = 0x8001; // WM_APP + 1
     private int _disposed;
 
     public ChannelReader<InputEvent> Events => _channel.Reader;
@@ -51,6 +54,24 @@ public sealed class InputMonitor : IDisposable
 
     /// <summary>Asks the worker to re-read the policy (enabled, paused, exclusions) from any thread.</summary>
     public void NotifyPolicyChanged() => _channel.Writer.TryWrite(new InputEvent(InputEventKind.PolicyChanged));
+
+    /// <summary>When either hook last saw any event; the watchdog compares it with Windows' last-input time.</summary>
+    public Health.HookActivity Activity { get; } = new();
+
+    /// <summary>Hooks reinstalled so far by <see cref="Reinstall"/>.</summary>
+    public int Reinstalls => Volatile.Read(ref _reinstalls);
+
+    /// <summary>
+    /// Removes and reinstalls the keyboard and mouse hooks on the hook thread (Windows may have
+    /// dropped them silently). Safe from any thread.
+    /// </summary>
+    public void Reinstall()
+    {
+        if (_threadId != 0)
+        {
+            PostThreadMessageW(_threadId, WmReinstall, 0, 0);
+        }
+    }
 
     /// <summary>Queues an event for the worker from any thread (e.g. a UI Automation answer).</summary>
     public void Post(InputEvent input) => _channel.Writer.TryWrite(input);
@@ -93,8 +114,8 @@ public sealed class InputMonitor : IDisposable
 
     private void Run()
     {
-        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead, Keyboard, AcceptForeignInjectedInput, () => Interlocked.Increment(ref _droppedKeys));
-        using var mouse = new MouseHook(_channel.Writer);
+        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead, Keyboard, AcceptForeignInjectedInput, () => Interlocked.Increment(ref _droppedKeys), Activity);
+        using var mouse = new MouseHook(_channel.Writer, Activity);
         using var focus = new FocusWatcher(_channel.Writer);
         try
         {
@@ -115,6 +136,27 @@ public sealed class InputMonitor : IDisposable
         // The hooks are removed by the using declarations when the loop ends (WM_QUIT or error).
         while (GetMessageW(out var msg, 0, 0, 0) > 0)
         {
+            if (msg.message == WmReinstall)
+            {
+                try
+                {
+                    keyboard.Dispose();
+                    keyboard.Install();
+                    mouse.Dispose();
+                    mouse.Install();
+                    Activity.Touch();
+                    Interlocked.Increment(ref _reinstalls);
+                }
+#pragma warning disable CA1031 // reported to the worker, which logs it
+                catch (Exception ex)
+#pragma warning restore CA1031
+                {
+                    _channel.Writer.TryWrite(InputEvent.Error(ex));
+                }
+
+                continue;
+            }
+
             TranslateMessage(in msg);
             DispatchMessageW(in msg);
         }

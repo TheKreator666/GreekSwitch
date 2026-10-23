@@ -125,5 +125,17 @@ internal static partial class NativeMethods
     [LibraryImport("wer.dll", StringMarshalling = StringMarshalling.Utf16)]
     public static partial int WerAddExcludedApplication(string pwzExeName, [MarshalAs(UnmanagedType.Bool)] bool bAllUsers);
 
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+    [LibraryImport("wtsapi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool WTSRegisterSessionNotification(nint hWnd, uint dwFlags);
+
+    [LibraryImport("wtsapi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool WTSUnRegisterSessionNotification(nint hWnd);
+
     public static bool IsDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
 }

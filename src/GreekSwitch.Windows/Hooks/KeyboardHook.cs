@@ -21,12 +21,20 @@ internal sealed class KeyboardHook : IDisposable
     private readonly TypeAheadGuard _typeAhead;
     private readonly bool _acceptForeignInjected;
     private readonly Action _keyDropped;
+    private readonly Health.HookActivity? _activity;
     private readonly HookProc _proc; // kept in a field so the GC can't collect the callback
     private nint _hook;
     private readonly LiveKeyboardState _keyboard;
     private bool _capsLock;
 
-    public KeyboardHook(ChannelWriter<InputEvent> writer, Func<bool> captureKeys, TypeAheadGuard typeAhead, LiveKeyboardState keyboard, bool acceptForeignInjected = false, Action? keyDropped = null)
+    public KeyboardHook(
+        ChannelWriter<InputEvent> writer,
+        Func<bool> captureKeys,
+        TypeAheadGuard typeAhead,
+        LiveKeyboardState keyboard,
+        bool acceptForeignInjected = false,
+        Action? keyDropped = null,
+        Health.HookActivity? activity = null)
     {
         _writer = writer;
         _captureKeys = captureKeys;
@@ -34,6 +42,7 @@ internal sealed class KeyboardHook : IDisposable
         _keyboard = keyboard;
         _acceptForeignInjected = acceptForeignInjected;
         _keyDropped = keyDropped ?? (() => { });
+        _activity = activity;
         _proc = Callback;
     }
 
@@ -60,6 +69,7 @@ internal sealed class KeyboardHook : IDisposable
 
     private unsafe nint Callback(int nCode, nint wParam, nint lParam)
     {
+        _activity?.Touch(); // any event, injected or not: proof the hook is alive
         try
         {
             if (nCode == HC_ACTION && wParam is WM_KEYDOWN or WM_SYSKEYDOWN)

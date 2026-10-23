@@ -11,11 +11,13 @@ internal sealed class MouseHook : IDisposable
 {
     private readonly ChannelWriter<InputEvent> _writer;
     private readonly HookProc _proc;
+    private readonly Health.HookActivity? _activity;
     private nint _hook;
 
-    public MouseHook(ChannelWriter<InputEvent> writer)
+    public MouseHook(ChannelWriter<InputEvent> writer, Health.HookActivity? activity = null)
     {
         _writer = writer;
+        _activity = activity;
         _proc = Callback;
     }
 
@@ -39,6 +41,7 @@ internal sealed class MouseHook : IDisposable
 
     private nint Callback(int nCode, nint wParam, nint lParam)
     {
+        _activity?.Touch();
         if (nCode == HC_ACTION && wParam is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN or WM_XBUTTONDOWN)
         {
             _writer.TryWrite(InputEvent.Click());
