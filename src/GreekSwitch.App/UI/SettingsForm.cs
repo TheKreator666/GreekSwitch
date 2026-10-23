@@ -104,6 +104,7 @@ internal sealed class SettingsForm : Form
         NgramWeight = original.NgramWeight,
         ContextWeight = original.ContextWeight,
         DebugLogText = original.DebugLogText,
+        LayoutSwitchSettleMs = original.LayoutSwitchSettleMs,
         ExcludedProcesses = Lines(_excluded),
         NeverConvert = Lines(_neverConvert),
     };

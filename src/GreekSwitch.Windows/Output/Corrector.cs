@@ -22,50 +22,77 @@ public sealed class Win32InputSender : IInputSender
     public uint Send(INPUT[] inputs) => SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 }
 
+/// <summary>What the corrector needs to know about the physical keyboard right now.</summary>
+public interface IKeyboardState
+{
+    /// <summary>Ctrl, Alt or Win held: Backspace would delete words or trigger shortcuts.</summary>
+    bool CommandModifierHeld { get; }
+
+    /// <summary>Shift held: it would change the case of the keys we press.</summary>
+    bool ShiftHeld { get; }
+
+    bool CapsLockOn { get; }
+}
+
 /// <summary>
-/// Applies a correction to the focused app. Order matters: switch the layout, wait until the
-/// focused window reports it, and only then send the Backspaces and Unicode text in one SendInput
-/// batch. Apps such as Windows 11 Notepad pass injected characters through the active layout, so
-/// Latin text sent while Greek is still active comes out as spaces.
+/// Applies a correction to the focused app: switch the layout, wait until the focused window
+/// reports it, then press the real keys that type the replacement in that layout, in one
+/// SendInput batch. Real keys rather than Unicode, because Windows 11 Notepad turns injected
+/// Unicode characters typed right after a layout switch into spaces or repeated letters,
+/// while it handles real keys fine. Unicode remains the fallback for characters no key types.
 /// </summary>
 public sealed class Corrector : ICorrectionOutput
 {
     private readonly ILayoutSwitcher _layouts;
+    private readonly Func<Lang, LayoutMap> _maps;
     private readonly TypeAheadGuard _typeAhead;
+    private readonly IKeyboardState _keyboard;
     private readonly ILogger _logger;
     private readonly IInputSender _sender;
-    private readonly Func<bool> _modifierHeld;
-    private readonly TimeSpan _switchTimeout;
+    private readonly Func<int, ushort> _scanCode;
+    private readonly TimeSpan _timeout;
 
     public Corrector(
         ILayoutSwitcher layouts,
+        Func<Lang, LayoutMap> maps,
         TypeAheadGuard typeAhead,
+        IKeyboardState keyboard,
         ILogger logger,
         IInputSender? sender = null,
-        Func<bool>? modifierHeld = null,
-        TimeSpan? switchTimeout = null)
+        Func<int, ushort>? scanCode = null,
+        TimeSpan? timeout = null)
     {
         _layouts = layouts;
+        _maps = maps;
         _typeAhead = typeAhead;
+        _keyboard = keyboard;
         _logger = logger;
         _sender = sender ?? new Win32InputSender();
-        _modifierHeld = modifierHeld ?? AnyModifierDown;
-        _switchTimeout = switchTimeout ?? TimeSpan.FromMilliseconds(300);
+        _scanCode = scanCode ?? (vk => (ushort)MapVirtualKeyExW((uint)vk, 0 /* MAPVK_VK_TO_VSC */, 0));
+        _timeout = timeout ?? TimeSpan.FromMilliseconds(300);
     }
+
+    /// <summary>Extra wait after the focused window reports a layout switch, before typing.</summary>
+    public TimeSpan SwitchSettle { get; init; }
 
     public bool Replace(int backspaces, string text, Lang layout)
     {
-        // With Ctrl, Alt or Win held, Backspace would delete whole words or trigger shortcuts.
-        if (_modifierHeld())
+        if (_keyboard.CommandModifierHeld)
         {
             _logger.LogInformation("Correction skipped: a modifier key is held");
             return false;
         }
 
-        var waited = Stopwatch.StartNew();
+        // E.g. Shift still down from typing '?' or '!': wait for it, or our keys come out shifted.
+        if (!WaitUntil(() => !_keyboard.ShiftHeld))
+        {
+            _logger.LogInformation("Correction skipped: Shift is held");
+            return false;
+        }
+
         if (!EnsureLayout(layout))
         {
-            _logger.LogWarning("Correction skipped: switch to {Lang} not visible after {Ms} ms", layout.Code(), (int)waited.ElapsedMilliseconds);
+            _logger.LogWarning("Correction skipped: switch to {Lang} not visible in time", layout.Code());
             return false;
         }
 
@@ -76,7 +103,13 @@ public sealed class Corrector : ICorrectionOutput
             return false;
         }
 
-        var inputs = InputBuilder.Build(backspaces, text);
+        var keys = KeyPlanner.Plan(text, _maps(layout), _keyboard.CapsLockOn);
+        if (keys is null)
+        {
+            _logger.LogInformation("Replacement has a character no {Lang} key types; sending it as Unicode", layout.Code());
+        }
+
+        var inputs = keys is null ? InputBuilder.Build(backspaces, text) : InputBuilder.BuildKeys(backspaces, keys, _scanCode);
         var sent = _sender.Send(inputs);
         if (sent != inputs.Length)
         {
@@ -88,9 +121,6 @@ public sealed class Corrector : ICorrectionOutput
         return true;
     }
 
-    private static bool AnyModifierDown() =>
-        IsDown(VirtualKeys.Control) || IsDown(VirtualKeys.Menu) || IsDown(VirtualKeys.LWin) || IsDown(VirtualKeys.RWin);
-
     private bool EnsureLayout(Lang layout)
     {
         if (_layouts.CurrentLayout() == layout)
@@ -99,17 +129,34 @@ public sealed class Corrector : ICorrectionOutput
         }
 
         _layouts.SwitchTo(layout);
-        var clock = Stopwatch.StartNew();
-        while (clock.Elapsed < _switchTimeout)
+        if (!WaitUntil(() => _layouts.CurrentLayout() == layout))
         {
-            if (_layouts.CurrentLayout() == layout)
+            return false;
+        }
+
+        // The window reports the new layout before the input stack has fully switched; keys sent
+        // immediately can still be translated with the old layout.
+        if (SwitchSettle > TimeSpan.Zero)
+        {
+            Thread.Sleep(SwitchSettle);
+        }
+
+        return true;
+    }
+
+    private bool WaitUntil(Func<bool> condition)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (clock.Elapsed >= _timeout)
             {
-                return true;
+                return false;
             }
 
             Thread.Sleep(1);
         }
 
-        return false;
+        return true;
     }
 }

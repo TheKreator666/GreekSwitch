@@ -26,6 +26,15 @@ public sealed class InputMonitor : IDisposable
     /// <summary>Counts captured typing keys so the corrector can tell when the user has typed ahead.</summary>
     public TypeAheadGuard TypeAhead { get; } = new();
 
+    /// <summary>Modifier and Caps Lock state, for retyping corrections with real keys.</summary>
+    public LiveKeyboardState Keyboard { get; } = new();
+
+    /// <summary>
+    /// Test mode for end-to-end runs: also process keys injected by *other* programs (our own
+    /// output stays ignored). The app turns it on only in Debug builds, behind an environment variable.
+    /// </summary>
+    public bool AcceptForeignInjectedInput { get; init; }
+
     /// <summary>
     /// When false the keyboard hook enqueues nothing at all (disabled, paused, password field,
     /// excluded app). Mouse and focus events still flow so the worker can notice changes.
@@ -74,7 +83,7 @@ public sealed class InputMonitor : IDisposable
 
     private void Run()
     {
-        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead);
+        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead, Keyboard, AcceptForeignInjectedInput);
         using var mouse = new MouseHook(_channel.Writer);
         using var focus = new FocusWatcher(_channel.Writer);
         try

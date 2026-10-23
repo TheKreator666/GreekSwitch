@@ -1,4 +1,5 @@
 using GreekSwitch.Core;
+using GreekSwitch.Core.Layout;
 using GreekSwitch.Windows.Layouts;
 using GreekSwitch.Windows.Native;
 using GreekSwitch.Windows.Output;
@@ -7,32 +8,107 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace GreekSwitch.Windows.Tests.Output;
 
 /// <summary>
-/// Regression: Windows 11 Notepad passes injected Unicode characters through the active layout,
-/// so "application" typed while Greek was still active came out as spaces. The corrector must
-/// switch first, wait until the switch is visible, and only then type.
+/// Regression for Windows 11 Notepad: injected Unicode text typed around a layout switch came out
+/// as spaces or repeated letters. The corrector must switch first, wait until the switch is
+/// visible, and then press the real keys of the target layout.
 /// </summary>
 public class CorrectorTests
 {
+    private const uint KeyUp = 0x0002;
+    private const uint Unicode = 0x0004;
+
     private readonly FakeSwitcher _layouts = new(Lang.Greek);
     private readonly TypeAheadGuard _guard = new();
+    private readonly FakeKeyboard _keyboard = new();
     private readonly FakeSender _sender;
-    private bool _modifierHeld;
 
     public CorrectorTests() => _sender = new FakeSender(_layouts);
 
-    private Corrector Create(TimeSpan? timeout = null) =>
-        new(_layouts, _guard, NullLogger.Instance, _sender, () => _modifierHeld, timeout ?? TimeSpan.FromMilliseconds(200));
+    private Corrector Create(TimeSpan? timeout = null) => new(
+        _layouts,
+        StaticLayouts.For,
+        _guard,
+        _keyboard,
+        NullLogger.Instance,
+        _sender,
+        vk => (ushort)(vk + 1000), // recognisable fake scan codes
+        timeout ?? TimeSpan.FromMilliseconds(200));
+
+    /// <summary>The characters a batch types, decoded the way the target layout would.</summary>
+    private static string Typed(INPUT[] batch, Lang layout)
+    {
+        var strokes = new List<KeyStroke>();
+        var shift = false;
+        foreach (var ki in batch.Select(i => i.U.ki))
+        {
+            if (ki.wVk == VirtualKeys.Shift)
+            {
+                shift = (ki.dwFlags & KeyUp) == 0;
+            }
+            else if ((ki.dwFlags & KeyUp) == 0 && ki.wVk != VirtualKeys.Back)
+            {
+                strokes.Add(new KeyStroke(ki.wVk, shift));
+            }
+        }
+
+        return new DualDecoder(StaticLayouts.Greek, StaticLayouts.English)
+            .Decode(strokes.Where(s => s.VirtualKey != VirtualKeys.Space).ToList(), layout);
+    }
 
     [Fact]
-    public void Switches_the_layout_before_typing_the_text()
+    public void Switches_the_layout_before_typing()
     {
         _layouts.PollsUntilSwitch = 3; // the target app takes a moment to apply the switch
 
-        var applied = Create().Replace(12, "application ", Lang.English);
+        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
 
-        applied.Should().BeTrue();
-        _sender.Batches.Should().ContainSingle();
         _sender.LayoutAtSend.Should().Equal(Lang.English);
+    }
+
+    [Fact]
+    public void Types_the_replacement_as_real_keys_of_the_target_layout()
+    {
+        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
+
+        var batch = _sender.Batches.Single();
+        batch.Should().NotContain(i => (i.U.ki.dwFlags & Unicode) != 0);
+        batch.Take(24).Should().AllSatisfy(i => i.U.ki.wVk.Should().Be(VirtualKeys.Back));
+        Typed(batch, Lang.English).Should().Be("application");
+        batch.Where(i => i.U.ki.wVk == 'A').Should().AllSatisfy(i => i.U.ki.wScan.Should().Be(1000 + 'A'));
+    }
+
+    [Fact]
+    public void Greek_with_tonos_and_final_sigma_is_typed_with_dead_key_and_W()
+    {
+        _layouts.Current = Lang.English;
+
+        Create().Replace(9, "πράξεις ", Lang.Greek).Should().BeTrue();
+
+        Typed(_sender.Batches.Single(), Lang.Greek).Should().Be("πράξεις");
+    }
+
+    [Fact]
+    public void Caps_lock_is_taken_into_account()
+    {
+        _layouts.Current = Lang.English;
+        _keyboard.CapsLockOn = true;
+
+        Create().Replace(4, "Ωρα ", Lang.Greek).Should().BeTrue();
+
+        // With Caps Lock on, Ω needs no Shift and ρ, α need Shift.
+        var keys = _sender.Batches.Single().Select(i => i.U.ki).Where(k => k.wVk != VirtualKeys.Back).ToList();
+        keys.TakeWhile(k => k.wVk != 'V').Should().NotContain(k => k.wVk == VirtualKeys.Shift);
+        keys.Count(k => k.wVk == VirtualKeys.Shift).Should().Be(4); // down+up for ρ and for α
+    }
+
+    [Fact]
+    public void Falls_back_to_unicode_for_characters_no_key_types()
+    {
+        _layouts.Current = Lang.English;
+
+        Create().Replace(2, "€ ", Lang.English).Should().BeTrue();
+
+        _sender.Batches.Single().Should().Contain(i => (i.U.ki.dwFlags & Unicode) != 0 && i.U.ki.wScan == '€');
     }
 
     [Fact]
@@ -50,9 +126,8 @@ public class CorrectorTests
     {
         _layouts.PollsUntilSwitch = int.MaxValue;
 
-        var applied = Create(TimeSpan.FromMilliseconds(30)).Replace(12, "application ", Lang.English);
+        Create(TimeSpan.FromMilliseconds(30)).Replace(12, "application ", Lang.English).Should().BeFalse();
 
-        applied.Should().BeFalse();
         _sender.Batches.Should().BeEmpty();
     }
 
@@ -61,7 +136,7 @@ public class CorrectorTests
     {
         _guard.OnKeyCaptured(isTypingKey: true);   // the delimiter, being processed
         _guard.MarkProcessed(_guard.Captured);
-        _guard.OnKeyCaptured(isTypingKey: true);   // a letter the user typed meanwhile
+        _guard.OnKeyCaptured(isTypingKey: true);   // a letter typed meanwhile
 
         Create().Replace(12, "application ", Lang.English).Should().BeFalse();
 
@@ -79,9 +154,9 @@ public class CorrectorTests
     }
 
     [Fact]
-    public void Types_nothing_while_a_modifier_is_held()
+    public void Types_nothing_while_ctrl_alt_or_win_is_held()
     {
-        _modifierHeld = true;
+        _keyboard.CommandModifierHeld = true;
 
         Create().Replace(12, "application ", Lang.English).Should().BeFalse();
 
@@ -90,11 +165,42 @@ public class CorrectorTests
     }
 
     [Fact]
+    public void Waits_for_shift_to_be_released()
+    {
+        _keyboard.ShiftHeldPolls = 5;
+
+        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
+
+        Typed(_sender.Batches.Single(), Lang.English).Should().Be("application");
+    }
+
+    [Fact]
+    public void Types_nothing_if_shift_stays_held()
+    {
+        _keyboard.ShiftHeldPolls = int.MaxValue;
+
+        Create(TimeSpan.FromMilliseconds(30)).Replace(12, "application ", Lang.English).Should().BeFalse();
+
+        _sender.Batches.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Reports_failure_when_SendInput_is_blocked()
     {
         _sender.Blocked = true;
 
         Create().Replace(12, "application ", Lang.English).Should().BeFalse();
+    }
+
+    private sealed class FakeKeyboard : IKeyboardState
+    {
+        public bool CommandModifierHeld { get; set; }
+
+        public int ShiftHeldPolls { get; set; }
+
+        public bool ShiftHeld => ShiftHeldPolls-- > 0;
+
+        public bool CapsLockOn { get; set; }
     }
 
     private sealed class FakeSwitcher(Lang initial) : ILayoutSwitcher

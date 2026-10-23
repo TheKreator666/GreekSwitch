@@ -66,6 +66,7 @@ hand while GreekSwitch is closed:
 | `minLength` | `3` | Words with fewer keys are only converted when the other reading is a dictionary word, the current one isn't, **and** the last few words were in the other language. This is what lets `ua` → `θα` happen mid-sentence. |
 | `replaceThreshold` | `2.0` | Score margin needed to replace a word when no dictionary settles it. Higher means more cautious. |
 | `dictionaryWeight` / `ngramWeight` / `contextWeight` | `2.0` / `1.0` / `0.3` | Scoring weights (see *How it decides*). File only; not in the dialog. |
+| `layoutSwitchSettleMs` | `50` | Pause after an app reports a layout switch, before retyping the word (0–250). File only; takes effect on restart. See *Known limitations*. |
 | `correctOnEnterAndTab` | `false` | Also correct words ended by Enter/Tab. Off because by the time GreekSwitch sees the key, Enter may already have sent a chat message and Tab may have moved focus. |
 | `excludedProcesses` | terminals, IDEs, password managers, game launchers and common games | Executable names where GreekSwitch is completely passive. The defaults include `WindowsTerminal.exe`, `cmd.exe`, `powershell.exe`, `pwsh.exe`, `Code.exe`, `devenv.exe` and `rider64.exe`. "Restore default exclusions" in the dialog brings the list back. |
 | `neverConvert` | `[]` | Words never to convert (accent- and case-insensitive). Undo adds to it. |
@@ -100,9 +101,19 @@ The rules, in order:
    evidence alone.
 5. Otherwise **keep**.
 
-A Greek replacement gets a final ς at the end of the word. The corrector sends one `SendInput`
-batch: Backspaces for the word and the delimiter, then the new word and delimiter as Unicode
-key events. It then posts `WM_INPUTLANGCHANGEREQUEST` to switch the foreground window's layout.
+A Greek replacement gets a final ς at the end of the word. To apply it, the corrector:
+
+1. posts `WM_INPUTLANGCHANGEREQUEST` to switch the foreground window to the target layout,
+2. waits until the focused window reports the new layout, plus `layoutSwitchSettleMs`,
+3. sends one `SendInput` batch: Backspaces for the word and the delimiter, then the **real key
+   presses** that type the new word and delimiter in the target layout (tonos via the `;` dead
+   key, ς via W, with Shift and Caps Lock handled).
+
+Real keys rather than Unicode characters: Windows 11 Notepad turns injected Unicode text typed
+around a layout switch into spaces or repeated letters. It also keeps translating keys with the
+old layout for a few tens of milliseconds after it reports the switch. Hence the settle pause:
+in end-to-end runs 0 ms failed, while 30–60 ms worked every time. Unicode is used only for a
+character no key types.
 
 The test suite runs samples of both dictionaries through the engine. It finds **0 false
 positives** in about 4,500 correctly typed words. It corrects **100%** of sampled Greek words
@@ -123,11 +134,14 @@ text. A unit test enforces this.
 
 ## Known limitations
 
-- **Typing very fast right after a word.** A correction switches the layout first and waits
-  (up to 300 ms, usually a few ms) until the app has applied it. Apps such as Windows 11 Notepad
-  turn injected text the active layout can't type into spaces. If you type another letter
-  before the correction is sent, the correction is skipped (and logged) so its Backspaces can't
-  delete your new letters. The word then stays as typed.
+- **Typing very fast right after a word.** A correction needs roughly 60–70 ms: the layout
+  switch, the settle pause, then the keys. If you type another letter before it's sent, the
+  correction is skipped (and logged) so its Backspaces can't delete your new letter, and the
+  word stays as typed. In end-to-end tests at normal typing speed (~150 ms between keys) every
+  correction landed.
+- **If a correction comes out in the wrong layout** (an app that applies layout switches more
+  slowly than Notepad), raise `layoutSwitchSettleMs` in `settings.json`. Values much above
+  100 ms start to collide with your next keystroke.
 - **Elevated windows** (run as administrator) can't receive input from a non-elevated
   GreekSwitch (Windows UIPI). The correction is skipped and logged. Run GreekSwitch elevated if
   you need it there.

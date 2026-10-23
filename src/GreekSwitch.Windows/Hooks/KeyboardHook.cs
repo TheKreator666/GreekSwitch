@@ -19,15 +19,19 @@ internal sealed class KeyboardHook : IDisposable
     private readonly ChannelWriter<InputEvent> _writer;
     private readonly Func<bool> _captureKeys;
     private readonly TypeAheadGuard _typeAhead;
+    private readonly bool _acceptForeignInjected;
     private readonly HookProc _proc; // kept in a field so the GC can't collect the callback
     private nint _hook;
+    private readonly LiveKeyboardState _keyboard;
     private bool _capsLock;
 
-    public KeyboardHook(ChannelWriter<InputEvent> writer, Func<bool> captureKeys, TypeAheadGuard typeAhead)
+    public KeyboardHook(ChannelWriter<InputEvent> writer, Func<bool> captureKeys, TypeAheadGuard typeAhead, LiveKeyboardState keyboard, bool acceptForeignInjected = false)
     {
         _writer = writer;
         _captureKeys = captureKeys;
         _typeAhead = typeAhead;
+        _keyboard = keyboard;
+        _acceptForeignInjected = acceptForeignInjected;
         _proc = Callback;
     }
 
@@ -35,6 +39,7 @@ internal sealed class KeyboardHook : IDisposable
     {
         // Seed the Caps Lock toggle state; afterwards it is tracked from the key events.
         _capsLock = (GetKeyState(VirtualKeys.Capital) & 1) != 0;
+        _keyboard.SetCapsLock(_capsLock);
         _hook = SetWindowsHookExW(WH_KEYBOARD_LL, Marshal.GetFunctionPointerForDelegate(_proc), GetModuleHandleW(null), 0);
         if (_hook == 0)
         {
@@ -58,12 +63,15 @@ internal sealed class KeyboardHook : IDisposable
             if (nCode == HC_ACTION && wParam is WM_KEYDOWN or WM_SYSKEYDOWN)
             {
                 var data = *(KBDLLHOOKSTRUCT*)lParam;
-                if ((data.flags & LLKHF_INJECTED) == 0)
+                // Never our own output; other injected input only in the opt-in Debug test mode.
+                var injected = (data.flags & LLKHF_INJECTED) != 0;
+                if (!injected || (_acceptForeignInjected && data.dwExtraInfo != InputBuilder.Signature))
                 {
                     var vk = (int)data.vkCode;
                     if (vk == VirtualKeys.Capital)
                     {
                         _capsLock = !_capsLock;
+                        _keyboard.SetCapsLock(_capsLock);
                     }
 
                     if (_captureKeys())

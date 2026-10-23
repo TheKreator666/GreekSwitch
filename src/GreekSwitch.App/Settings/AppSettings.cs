@@ -17,6 +17,12 @@ internal sealed class AppSettings
 
     public double ContextWeight { get; set; } = 0.3;
 
+    /// <summary>
+    /// Pause after the focused window reports a layout switch, before retyping a corrected word.
+    /// Windows 11 Notepad still translated keys with the old layout at 0 ms; 30-60 ms was reliable.
+    /// </summary>
+    public int LayoutSwitchSettleMs { get; set; } = 50;
+
     /// <summary>Also correct words ended by Enter or Tab (off: Enter may have sent a chat message).</summary>
     public bool CorrectOnEnterAndTab { get; set; }
 

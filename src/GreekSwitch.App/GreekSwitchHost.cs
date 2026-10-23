@@ -1,4 +1,5 @@
 using GreekSwitch.App.Settings;
+using GreekSwitch.Core;
 using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Input;
 using GreekSwitch.Core.Layout;
@@ -52,11 +53,24 @@ internal sealed class GreekSwitchHost : IDisposable
 
         var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams), neverConvert, ToScoring(settings));
         var layouts = new LayoutSwitcher(logger);
-        var monitor = new InputMonitor();
+        var monitor = new InputMonitor
+        {
+#if DEBUG
+            AcceptForeignInjectedInput = Environment.GetEnvironmentVariable("GREEKSWITCH_TEST_ACCEPT_INJECTED") == "1",
+#endif
+        };
+        if (monitor.AcceptForeignInjectedInput)
+        {
+            logger.LogWarning("TEST MODE: processing keys injected by other programs");
+        }
+
         var session = new TypingSession(
             engine,
             new KeyClassifier(greek, english),
-            new Corrector(layouts, monitor.TypeAhead, logger),
+            new Corrector(layouts, lang => lang == Lang.Greek ? greek : english, monitor.TypeAhead, monitor.Keyboard, logger)
+            {
+                SwitchSettle = TimeSpan.FromMilliseconds(Math.Clamp(settings.LayoutSwitchSettleMs, 0, 250)),
+            },
             neverConvert,
             logger,
             ToSession(settings));

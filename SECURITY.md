@@ -25,7 +25,9 @@ While GreekSwitch is disabled, paused, in an excluded app, or in a password fiel
   and an undo through the pipeline with a capturing logger, and fails if any typed or produced
   word appears. Exception messages are left out of the log as well.
 - **Injected input is ignored.** Events flagged `LLKHF_INJECTED`, including GreekSwitch's own
-  `SendInput` output, are never processed.
+  `SendInput` output, are never processed. Debug builds have an end-to-end test mode, enabled
+  only by the environment variable `GREEKSWITCH_TEST_ACCEPT_INJECTED=1`, that also processes
+  keys injected by *other* programs. Release builds don't contain the switch.
 - The only debug path that can log text is compiled in **Debug builds only** (`#if DEBUG`), and
   even then it needs the explicit `debugLogText` setting.
 
