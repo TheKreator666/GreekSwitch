@@ -88,21 +88,32 @@ score = (isDictionaryWord ? dictionaryWeight : 0) + ngramWeight × trigramLogPro
 ```
 
 - **Dictionary:** Hunspell (LibreOffice `el_GR` and `en_US`) via WeCantSpell. Greek matching
-  ignores accents, case and σ/ς, so `καλημερα`, `ΚΑΛΗΜΕΡΑ` and `πράξεισ` all count.
+  ignores accents and the σ/ς form at the end of a word, so `καλημερα`, `ΚΑΛΗΜΕΡΑ` and `πράξεισ`
+  all count. Two things are *not* ignored. A `ς` before another letter (`ςασ`, which is "was"
+  typed in the Greek layout) is never Greek. A lowercase reading doesn't match an entry that
+  only exists capitalised (`na` isn't English because of `Na`, `ελλάδα` isn't the name
+  `Ελλάδα`); capitalised input still matches names.
 - **Trigrams:** character trigram models for each language, averaged per character.
+- **Word frequency:** a Zipf table of the ~50k most frequent words per language (wordfreq).
 - **Context prior:** a small bonus toward the language of the last 3 accepted words.
 
 The rules, in order:
 
 1. **Skip code-like words**: digits or symbols such as `@ / _ #`, no letters at all, camelCase
-   in both readings, or a word glued to a preceding `x.` (domains such as `mail.com`).
+   in both readings, a word glued to a preceding `x.` (domains such as `mail.com`), or a word
+   during which you switched layout yourself (Alt+Shift, Win+Space).
 2. **Skip never-convert words.**
-3. **Skip short words** (< `minLength` keys) unless dictionary and context both agree.
-4. **Replace** if the current reading isn't a word but the other one is, **or** the other
-   reading's combined score beats the current one by more than `replaceThreshold`. Because the
-   margin uses the *combined* score, a valid current word effectively never loses on n-gram
-   evidence alone.
-5. Otherwise **keep**.
+3. **Both readings are words** (`den`/`δεν`, `toy`/`του`): replace only if the last words were in
+   the other language **and** the other reading is far more common (Zipf at least 1.5 higher).
+   Single letters are never replaced this way.
+4. **Skip short words** (< `minLength` keys) unless the other reading is a *common* word
+   (Zipf ≥ 5), the current one isn't a word, and the context agrees. So `ua` becomes `θα` mid
+   sentence, but `tv` and `ai` never become the rare `τω`, `αι`.
+5. **Replace** if the current reading isn't a word but the other one is, **or** neither is a word
+   and the other reading's combined score beats the current one by more than
+   `replaceThreshold`. A reading that is a dictionary word is never replaced on letter
+   statistics alone.
+6. Otherwise **keep**.
 
 A Greek replacement gets a final ς at the end of the word. To apply it, the corrector:
 
@@ -118,11 +129,19 @@ old layout for a few tens of milliseconds after it reports the switch. Hence the
 in end-to-end runs 0 ms failed, while 30–60 ms worked every time. Unicode is used only for a
 character no key types.
 
-The test suite runs samples of both dictionaries through the engine. It finds **0 false
-positives** in about 4,500 correctly typed words. It corrects **100%** of sampled Greek words
-typed with the English layout and **97.8%** of English words typed with the Greek layout. The
-English misses are words whose Greek reading is also a Greek word, so leaving them alone is
-correct (e.g. *India* → *Ινδια*).
+Measured by the evaluation harness (see *Measuring decision quality*) over the 5,000 most
+frequent words of each language, **weighted by how often they occur**:
+
+| | Greek | English |
+|---|---|---|
+| Typed correctly: wrongly changed | 0.01% | 0.00% |
+| Typed in the wrong layout: corrected, no context / with context | 69% / 87% | 73% / 90% |
+| Real sentences, wrong layout from a random word on: corrected / correct words changed | 83% / 0.04% | 83% / 0.43% |
+
+Latin words typed on purpose inside Greek (`email`, `pdf`, `Teams`, `tv`, `ai`): 0 of 118
+changed. What's left uncorrected is mostly the very first word of a sentence (no context yet),
+single letters, true ties such as `to`/`το`, and names that read as words in both languages
+(`Tom`/`Τομ`).
 
 ## Privacy
 

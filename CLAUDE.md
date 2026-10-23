@@ -101,15 +101,18 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
 weighted by frequency, each judged in isolation with the stated context; plus 400 Tatoeba
 sentences per language. (An earlier Python port gave 0.03% / 68% / 70% / 72% / 85%.)
 
-| Scenario | Result |
-|---|---|
-| Greek typed correctly, Greek context: words wrongly changed | 0.02% |
-| English typed correctly, English context: words wrongly changed | 0.00% |
-| Latin tokens inside Greek prose: wrongly changed (unweighted, 118 tokens) | 1.69% (`tv`, `ai`) |
-| Greek typed in the EN layout: corrected (no context / Greek context) | 67.7% / 70.1% |
-| English typed in the GR layout: corrected (no context / English context) | 71.8% / 84.5% |
-| Sentences, Greek: wrong-layout words corrected / correct words wrongly changed | 73.8% / 0.05% |
-| Sentences, English: wrong-layout words corrected / correct words wrongly changed | 78.5% / 0.43% (names: `Sami`, `Rima`) |
+| Scenario | M9 baseline | After milestone 10 |
+|---|---|---|
+| Greek typed correctly, Greek context: words wrongly changed | 0.02% | 0.01% |
+| English typed correctly, English context: words wrongly changed | 0.00% | 0.00% |
+| Latin tokens inside Greek prose: wrongly changed (unweighted, 118 tokens) | 1.69% (`tv`, `ai`) | 0.00% |
+| Greek typed in the EN layout: corrected (no context / Greek context) | 67.7% / 70.1% | 69.0% / 87.3% |
+| English typed in the GR layout: corrected (no context / English context) | 71.8% / 84.5% | 73.1% / 89.6% |
+| Sentences, Greek: wrong-layout words corrected / correct words wrongly changed | 73.8% / 0.05% | 83.2% / 0.04% |
+| Sentences, English: wrong-layout words corrected / correct words wrongly changed | 78.5% / 0.43% | 83.2% / 0.43% (names: `Sami`, `Rima`) |
+
+Word-level rows type a name capitalised when its only dictionary entry is capitalised (from 10b
+on; the lowercase frequency lists otherwise overstate false positives).
 
 What's missed is the most frequent words, because their other reading is also "a word":
 `to`(το) `na`(να) `toy`(του) `me`(με) `den`(δεν) `ton`(τον) `soy`(σου) `saw`(σας) `mia`(μια),
