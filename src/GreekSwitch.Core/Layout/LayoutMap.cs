@@ -4,7 +4,7 @@ namespace GreekSwitch.Core.Layout;
 
 /// <summary>
 /// Virtual-key → character table for one keyboard layout, plus the dead-key compositions it
-/// supports. Immutable; build a corrected copy with <see cref="WithKeys"/>.
+/// supports. Immutable; build a corrected copy with <see cref="WithOverrides"/>.
 /// </summary>
 public sealed class LayoutMap
 {
@@ -53,15 +53,23 @@ public sealed class LayoutMap
     public char? Compose(char dead, char baseChar) =>
         _compositions.TryGetValue((dead, baseChar), out var composed) ? composed : null;
 
-    /// <summary>A copy of this map with some key definitions replaced or added.</summary>
-    public LayoutMap WithKeys(IReadOnlyDictionary<int, KeyDefinition> overrides)
+    /// <summary>A copy of this map with some key definitions and dead-key compositions replaced or added.</summary>
+    public LayoutMap WithOverrides(
+        IReadOnlyDictionary<int, KeyDefinition>? keys = null,
+        IReadOnlyDictionary<(char Dead, char Base), char>? compositions = null)
     {
-        var merged = new Dictionary<int, KeyDefinition>(_keys);
-        foreach (var (vk, def) in overrides)
+        var mergedKeys = new Dictionary<int, KeyDefinition>(_keys);
+        foreach (var (vk, def) in keys ?? new Dictionary<int, KeyDefinition>())
         {
-            merged[vk] = def;
+            mergedKeys[vk] = def;
         }
 
-        return new LayoutMap(Language, LayoutId, merged, _compositions);
+        var mergedCompositions = new Dictionary<(char, char), char>(_compositions);
+        foreach (var (pair, composed) in compositions ?? new Dictionary<(char, char), char>())
+        {
+            mergedCompositions[pair] = composed;
+        }
+
+        return new LayoutMap(Language, LayoutId, mergedKeys, mergedCompositions);
     }
 }

@@ -1,0 +1,88 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Threading.Channels;
+using GreekSwitch.Core.Input;
+using GreekSwitch.Core.Layout;
+using GreekSwitch.Windows.Native;
+using static GreekSwitch.Windows.Native.NativeMethods;
+
+namespace GreekSwitch.Windows.Hooks;
+
+/// <summary>
+/// WH_KEYBOARD_LL hook. The callback only reads the key and the modifier state and enqueues
+/// them: Windows silently removes low-level hooks that are slow to return. Injected events,
+/// including our own SendInput output, are ignored. Install it on a thread that runs a message loop.
+/// </summary>
+internal sealed class KeyboardHook : IDisposable
+{
+    private readonly ChannelWriter<InputEvent> _writer;
+    private readonly Func<bool> _captureKeys;
+    private readonly HookProc _proc; // kept in a field so the GC can't collect the callback
+    private nint _hook;
+    private bool _capsLock;
+
+    public KeyboardHook(ChannelWriter<InputEvent> writer, Func<bool> captureKeys)
+    {
+        _writer = writer;
+        _captureKeys = captureKeys;
+        _proc = Callback;
+    }
+
+    public void Install()
+    {
+        // Seed the Caps Lock toggle state; afterwards it is tracked from the key events.
+        _capsLock = (GetKeyState(VirtualKeys.Capital) & 1) != 0;
+        _hook = SetWindowsHookExW(WH_KEYBOARD_LL, Marshal.GetFunctionPointerForDelegate(_proc), GetModuleHandleW(null), 0);
+        if (_hook == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "SetWindowsHookEx(WH_KEYBOARD_LL) failed");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_hook != 0)
+        {
+            UnhookWindowsHookEx(_hook);
+            _hook = 0;
+        }
+    }
+
+    private unsafe nint Callback(int nCode, nint wParam, nint lParam)
+    {
+        try
+        {
+            if (nCode == HC_ACTION && wParam is WM_KEYDOWN or WM_SYSKEYDOWN)
+            {
+                var data = *(KBDLLHOOKSTRUCT*)lParam;
+                if ((data.flags & LLKHF_INJECTED) == 0)
+                {
+                    var vk = (int)data.vkCode;
+                    if (vk == VirtualKeys.Capital)
+                    {
+                        _capsLock = !_capsLock;
+                    }
+
+                    if (_captureKeys())
+                    {
+                        _writer.TryWrite(InputEvent.ForKey(new KeyInput(
+                            vk,
+                            Shift: IsDown(VirtualKeys.Shift),
+                            CapsLock: _capsLock,
+                            Control: IsDown(VirtualKeys.Control),
+                            Alt: (data.flags & LLKHF_ALTDOWN) != 0 || IsDown(VirtualKeys.Menu),
+                            Win: IsDown(VirtualKeys.LWin) || IsDown(VirtualKeys.RWin))));
+                    }
+                }
+            }
+        }
+#pragma warning disable CA1031 // An exception must never cross back into user32; report it to the worker instead.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            _writer.TryWrite(InputEvent.Error(ex));
+        }
+
+        return CallNextHookEx(_hook, nCode, wParam, lParam);
+    }
+}

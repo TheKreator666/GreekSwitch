@@ -5,7 +5,7 @@ using Xunit.Abstractions;
 
 namespace GreekSwitch.Core.Tests.Scoring;
 
-[Collection(LanguageDataCollection.Name)]
+[Collection(LanguageDataGroup.Name)]
 public class TrigramModelTests(LanguageDataFixture data, ITestOutputHelper output)
 {
     private readonly ITrigramModel _model = data.Trigrams;

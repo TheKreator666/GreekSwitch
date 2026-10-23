@@ -2,7 +2,7 @@ using GreekSwitch.Core.Tests.Support;
 
 namespace GreekSwitch.Core.Tests.Session;
 
-[Collection(LanguageDataCollection.Name)]
+[Collection(LanguageDataGroup.Name)]
 public class UndoTests(LanguageDataFixture data)
 {
     [Fact]

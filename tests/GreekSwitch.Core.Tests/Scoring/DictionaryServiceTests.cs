@@ -3,7 +3,7 @@ using GreekSwitch.Core.Tests.Support;
 
 namespace GreekSwitch.Core.Tests.Scoring;
 
-[Collection(LanguageDataCollection.Name)]
+[Collection(LanguageDataGroup.Name)]
 public class DictionaryServiceTests(LanguageDataFixture data)
 {
     private readonly IDictionaryService _dictionaries = data.Dictionaries;

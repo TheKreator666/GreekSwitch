@@ -8,7 +8,7 @@ namespace GreekSwitch.Core.Tests.Session;
 /// as it would appear with no corrector running, and each word's script says which layout was
 /// active when it was typed.
 /// </summary>
-[Collection(LanguageDataCollection.Name)]
+[Collection(LanguageDataGroup.Name)]
 public class SentenceTests(LanguageDataFixture data, ITestOutputHelper output)
 {
     public static TheoryData<string, string> Sentences() => new()

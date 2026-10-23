@@ -19,7 +19,7 @@ public sealed class LanguageDataFixture
 }
 
 [CollectionDefinition(Name)]
-public sealed class LanguageDataCollection : ICollectionFixture<LanguageDataFixture>
+public sealed class LanguageDataGroup : ICollectionFixture<LanguageDataFixture>
 {
     public const string Name = "Language data";
 }

@@ -12,7 +12,7 @@ namespace GreekSwitch.Core.Tests.Decisions;
 /// Real dictionary words typed in the right layout must stay as they are. A deterministic sample
 /// of each dictionary goes through the engine, and the rate of wrong replacements must stay tiny.
 /// </summary>
-[Collection(LanguageDataCollection.Name)]
+[Collection(LanguageDataGroup.Name)]
 public class FalsePositiveTests(LanguageDataFixture data, ITestOutputHelper output)
 {
     [Theory]
