@@ -175,7 +175,13 @@ public sealed class Corrector : ICorrectionOutput
         _layouts.SwitchTo(layout);
         if (!WaitUntil(() => _layouts.CurrentLayout() == layout))
         {
-            return false;
+            // Some apps ignore WM_INPUTLANGCHANGEREQUEST: press the user's own switch hotkey once.
+            _logger.LogInformation("Layout switch request ignored; trying the layout hotkey");
+            _layouts.SwitchWithHotkey();
+            if (!WaitUntil(() => _layouts.CurrentLayout() == layout))
+            {
+                return false;
+            }
         }
 
         // The window reports the new layout before the input stack has fully switched; keys sent

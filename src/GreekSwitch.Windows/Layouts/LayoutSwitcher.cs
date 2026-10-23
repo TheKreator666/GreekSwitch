@@ -1,4 +1,5 @@
 using GreekSwitch.Core;
+using GreekSwitch.Windows.Output;
 using Microsoft.Extensions.Logging;
 using static GreekSwitch.Windows.Native.NativeMethods;
 
@@ -10,6 +11,9 @@ public interface ILayoutSwitcher
     Lang? CurrentLayout();
 
     void SwitchTo(Lang lang);
+
+    /// <summary>Presses the user's language-switch hotkey once (fallback for apps that ignore <see cref="SwitchTo"/>).</summary>
+    void SwitchWithHotkey();
 }
 
 /// <summary>
@@ -20,8 +24,13 @@ public interface ILayoutSwitcher
 public sealed class LayoutSwitcher : ILayoutSwitcher
 {
     private readonly ILogger _logger;
+    private readonly IInputSender _sender;
 
-    public LayoutSwitcher(ILogger logger) => _logger = logger;
+    public LayoutSwitcher(ILogger logger, IInputSender? sender = null)
+    {
+        _logger = logger;
+        _sender = sender ?? new Win32InputSender();
+    }
 
     public Lang? CurrentLayout() => KeyboardLayouts.ToLang(KeyboardLayouts.ForegroundLayout().Hkl);
 
@@ -43,6 +52,16 @@ public sealed class LayoutSwitcher : ILayoutSwitcher
         if (window == 0 || !PostMessageW(window, WM_INPUTLANGCHANGEREQUEST, 0, hkl))
         {
             _logger.LogWarning("Layout switch to {Lang} could not be posted", lang.Code());
+        }
+    }
+
+    public void SwitchWithHotkey()
+    {
+        var hotkey = LayoutHotkeys.Current();
+        var inputs = InputBuilder.Chord(LayoutHotkeys.Keys(hotkey));
+        if (_sender.Send(inputs) != inputs.Length)
+        {
+            _logger.LogWarning("Layout hotkey {Hotkey} could not be sent", hotkey);
         }
     }
 }

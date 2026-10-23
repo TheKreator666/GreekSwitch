@@ -46,6 +46,15 @@ public static class InputBuilder
         return [.. inputs];
     }
 
+    /// <summary>Presses <paramref name="keys"/> together: down in order, up in reverse (e.g. Alt+Shift).</summary>
+    public static INPUT[] Chord(IReadOnlyList<int> keys)
+    {
+        var inputs = new List<INPUT>(keys.Count * 2);
+        inputs.AddRange(keys.Select(vk => Key(vk, 0, 0)));
+        inputs.AddRange(keys.Reverse().Select(vk => Key(vk, 0, KEYEVENTF_KEYUP)));
+        return [.. inputs];
+    }
+
     /// <summary>Backspaces, then <paramref name="text"/> as Unicode events ('\n' and '\t' as Enter and Tab).</summary>
     public static INPUT[] Build(int backspaces, string text)
     {

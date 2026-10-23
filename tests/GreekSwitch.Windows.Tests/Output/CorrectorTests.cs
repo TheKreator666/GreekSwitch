@@ -207,6 +207,18 @@ public class CorrectorTests
     }
 
     [Fact]
+    public void Falls_back_to_the_users_layout_hotkey_once_when_the_switch_request_is_ignored()
+    {
+        _layouts.PollsUntilSwitch = int.MaxValue; // the app ignores WM_INPUTLANGCHANGEREQUEST
+        _layouts.HotkeyWorks = true;
+
+        Create(TimeSpan.FromMilliseconds(30)).Replace(new string('x', 12), "application ", Lang.English).Should().BeTrue();
+
+        _layouts.HotkeyPresses.Should().Be(1);
+        _sender.LayoutAtSend.Should().Equal(Lang.English);
+    }
+
+    [Fact]
     public void Types_nothing_when_the_switch_never_takes_effect()
     {
         _layouts.PollsUntilSwitch = int.MaxValue;
@@ -214,6 +226,7 @@ public class CorrectorTests
         Create(TimeSpan.FromMilliseconds(30)).Replace(new string('x', 12), "application ", Lang.English).Should().BeFalse();
 
         _sender.Batches.Should().BeEmpty();
+        _layouts.HotkeyPresses.Should().Be(1, "the hotkey fallback is tried once, then it gives up");
     }
 
     [Fact]
@@ -327,6 +340,20 @@ public class CorrectorTests
             SwitchRequests.Add(lang);
             _pending = lang;
             _polls = 0;
+        }
+
+        public bool HotkeyWorks { get; set; }
+
+        public int HotkeyPresses { get; private set; }
+
+        public void SwitchWithHotkey()
+        {
+            HotkeyPresses++;
+            if (HotkeyWorks && _pending is { } target)
+            {
+                Current = target;
+                _pending = null;
+            }
         }
     }
 

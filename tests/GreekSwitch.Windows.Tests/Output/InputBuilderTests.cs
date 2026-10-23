@@ -53,6 +53,18 @@ public class InputBuilderTests
     }
 
     [Fact]
+    public void A_chord_holds_keys_in_order_and_releases_them_in_reverse()
+    {
+        var keys = InputBuilder.Chord([VirtualKeys.LMenu, VirtualKeys.LShift]).Select(i => (i.U.ki.wVk, Up: (i.U.ki.dwFlags & KeyUp) != 0)).ToList();
+
+        keys.Should().Equal(
+            ((ushort)VirtualKeys.LMenu, false),
+            ((ushort)VirtualKeys.LShift, false),
+            ((ushort)VirtualKeys.LShift, true),
+            ((ushort)VirtualKeys.LMenu, true));
+    }
+
+    [Fact]
     public void Empty_correction_is_empty()
     {
         InputBuilder.Build(0, "").Should().BeEmpty();
