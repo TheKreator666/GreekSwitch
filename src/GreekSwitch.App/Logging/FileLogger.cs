@@ -63,7 +63,7 @@ internal sealed class FileLogger : ILogger
 
                 File.AppendAllText(FilePath, line.AppendLine().ToString());
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Logging must never take the app down; a lost line is acceptable.
             }

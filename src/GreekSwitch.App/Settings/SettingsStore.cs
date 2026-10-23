@@ -37,16 +37,30 @@ internal sealed class SettingsStore
         {
             if (File.Exists(FilePath))
             {
-                var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions);
+                var json = File.ReadAllText(FilePath);
+                var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
                 if (settings is not null)
                 {
-                    return Sanitize(settings);
+                    if (!json.Contains("\"settingsVersion\"", StringComparison.Ordinal))
+                    {
+                        settings.SettingsVersion = 1; // written before versioning
+                    }
+
+                    var migrated = Migrate(settings);
+                    Sanitize(settings);
+                    if (migrated)
+                    {
+                        Save(settings);
+                    }
+
+                    return settings;
                 }
             }
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning("settings.json could not be read ({Type}); using defaults", ex.GetType().Name);
+            KeepBadCopy();
         }
 
         var defaults = new AppSettings();
@@ -70,6 +84,41 @@ internal sealed class SettingsStore
                 _logger.LogError("settings.json could not be saved ({Type})", ex.GetType().Name);
             }
         }
+    }
+
+    /// <summary>Saves the unreadable file as settings.json.bad, so a typo doesn't silently wipe the user's settings.</summary>
+    private void KeepBadCopy()
+    {
+        try
+        {
+            if (File.Exists(FilePath))
+            {
+                File.Copy(FilePath, FilePath + ".bad", overwrite: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning("settings.json.bad could not be written ({Type})", ex.GetType().Name);
+        }
+    }
+
+    /// <summary>Brings an older file up to date; returns true if anything changed.</summary>
+    private bool Migrate(AppSettings s)
+    {
+        if (s.SettingsVersion >= AppSettings.CurrentVersion)
+        {
+            return false;
+        }
+
+        if (s.SettingsVersion < 2)
+        {
+            var current = new HashSet<string>(s.ExcludedProcesses ?? [], StringComparer.OrdinalIgnoreCase);
+            s.ExcludedProcesses = [.. s.ExcludedProcesses ?? [], .. AppSettings.AddedInVersion2.Where(p => !current.Contains(p))];
+        }
+
+        _logger.LogInformation("settings.json migrated from version {From} to {To}", s.SettingsVersion, AppSettings.CurrentVersion);
+        s.SettingsVersion = AppSettings.CurrentVersion;
+        return true;
     }
 
     private static AppSettings Sanitize(AppSettings s)

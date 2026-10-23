@@ -3,6 +3,22 @@ namespace GreekSwitch.App.Settings;
 /// <summary>Contents of %APPDATA%\GreekSwitch\settings.json.</summary>
 internal sealed class AppSettings
 {
+    /// <summary>Version of this file's schema/defaults; older files are migrated on load.</summary>
+    public const int CurrentVersion = 2;
+
+    /// <summary>
+    /// Defaults added in version 2 (remote desktops, VMs), merged once into existing files'
+    /// exclusion lists. Each later version adds its own list here.
+    /// </summary>
+    public static IReadOnlyList<string> AddedInVersion2 { get; } =
+    [
+        "mstsc.exe", "msrdc.exe", "wfica32.exe", "CDViewer.exe", "vmconnect.exe", "vmware.exe",
+        "vmware-vmx.exe", "VirtualBoxVM.exe", "AnyDesk.exe", "TeamViewer.exe", "parsecd.exe",
+    ];
+
+    /// <summary>Schema version of this file (1 = written before versioning).</summary>
+    public int SettingsVersion { get; set; } = CurrentVersion;
+
     public bool Enabled { get; set; } = true;
 
     /// <summary>Words with fewer keys are left alone unless dictionary and context agree.</summary>
@@ -59,6 +75,10 @@ internal sealed class AppSettings
         // Terminals and editors, where text is code or commands.
         "WindowsTerminal.exe", "OpenConsole.exe", "conhost.exe", "cmd.exe", "powershell.exe", "pwsh.exe",
         "mintty.exe", "putty.exe", "Code.exe", "devenv.exe", "rider64.exe", "idea64.exe", "nvim-qt.exe",
+
+        // Remote desktops and virtual machines: keys are decoded with the *local* layout there,
+        // while the remote side has its own.
+        .. AddedInVersion2,
 
         // Launchers and games (WASD and chat shortcuts are not words).
         "steam.exe", "steamwebhelper.exe", "EpicGamesLauncher.exe", "Battle.net.exe", "EADesktop.exe",
