@@ -101,7 +101,8 @@ public sealed class CorrectionWorker
             return;
         }
 
-        if (_layouts.CurrentLayout() is not { } layout)
+        // The layout when the key was pressed (read in the hook), not when the worker got to it.
+        if (input.KeyLanguage(_layouts.CurrentLayout) is not { } layout)
         {
             _session.Reset(); // a third layout is active: stay out of the way
             return;

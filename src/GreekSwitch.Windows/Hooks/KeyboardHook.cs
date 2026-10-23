@@ -77,6 +77,7 @@ internal sealed class KeyboardHook : IDisposable
                     if (_captureKeys())
                     {
                         var typedCount = _typeAhead.OnKeyCaptured(isTypingKey: !VirtualKeys.IsModifier(vk));
+                        var (layout, focus) = Layouts.KeyboardLayouts.ForegroundLayout();
                         _writer.TryWrite(InputEvent.ForKey(
                             new KeyInput(
                                 vk,
@@ -86,7 +87,8 @@ internal sealed class KeyboardHook : IDisposable
                                 Alt: (data.flags & LLKHF_ALTDOWN) != 0 || IsDown(VirtualKeys.Menu),
                                 Win: IsDown(VirtualKeys.LWin) || IsDown(VirtualKeys.RWin)),
                             typedCount,
-                            Layouts.KeyboardLayouts.ForegroundLayout().FocusWindow));
+                            focus,
+                            layout));
                     }
                 }
             }
