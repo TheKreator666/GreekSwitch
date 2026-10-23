@@ -44,6 +44,19 @@ public sealed class NeverConvertList : INeverConvertList
         }
     }
 
+    /// <summary>Replaces the whole list (the user edited it in Settings). Does not raise <see cref="Changed"/>.</summary>
+    public void ReplaceAll(IEnumerable<string> words)
+    {
+        lock (_gate)
+        {
+            _words.Clear();
+            foreach (var word in words)
+            {
+                AddCore(word);
+            }
+        }
+    }
+
     /// <summary>The words as first added, sorted.</summary>
     public IReadOnlyList<string> Snapshot()
     {

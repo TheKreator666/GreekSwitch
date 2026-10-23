@@ -6,6 +6,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>GreekSwitch</AssemblyName>
     <RootNamespace>GreekSwitch.App</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <Product>GreekSwitch</Product>
+    <Description>Greek/English keyboard layout auto-corrector</Description>
   </PropertyGroup>
 
   <ItemGroup>
