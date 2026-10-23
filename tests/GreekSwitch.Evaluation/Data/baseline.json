@@ -1,7 +1,7 @@
 {
   "Greek typed correctly, Greek context": 0.000116,
   "English typed correctly, English context": 2.1E-05,
-  "Latin tokens inside Greek prose (EN layout, Greek context)": 0.016949,
-  "Sentences (Greek): words typed correctly": 0.000449,
-  "Sentences (English): words typed correctly": 0.004285
+  "Latin tokens inside Greek prose (EN layout, Greek context)": 0,
+  "Sentences (Greek): words typed correctly": 0.000444,
+  "Sentences (English): words typed correctly": 0.004269
 }

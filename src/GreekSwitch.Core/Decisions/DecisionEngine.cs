@@ -9,8 +9,8 @@ namespace GreekSwitch.Core.Decisions;
 /// Decides whether a completed word was typed in the wrong layout. Rules, in order:
 /// 1. code-like words are kept; 2. never-convert words are kept; 2b. if both readings are words
 /// (and there are 2+ keys), replace only when context favours the other language and the other
-/// reading is far more frequent; 3. short words are kept unless the alternative is a word, the
-/// current reading isn't, and context agrees; 4. replace if the current reading isn't a word but
+/// reading is far more frequent; 3. short words are kept unless the alternative is a common word,
+/// the current reading isn't a word, and context agrees; 4. replace if the current reading isn't a word but
 /// the alternative is, or the alternative's combined score wins by more than ReplaceThreshold;
 /// 5. otherwise keep.
 /// </summary>
@@ -91,6 +91,7 @@ public sealed class DecisionEngine
         if (keys.Count < options.MinLength)
         {
             return alternativeIsBetterWord && _context.Majority == alternativeLayout
+                && alternativeScore.Zipf >= options.ShortWordMinZipf
                 ? Accept(current, alternative, currentLayout, ReplaceReason.ShortWordInContext)
                 : KeepWord(KeepReason.TooShort, currentScore);
         }

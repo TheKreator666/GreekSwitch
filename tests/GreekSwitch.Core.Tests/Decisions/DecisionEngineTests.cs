@@ -150,6 +150,7 @@ public class DecisionEngineTests
     public void Short_word_converts_when_dictionary_and_context_agree()
     {
         _dictionary.Add(Lang.Greek, "θα");
+        _frequency.Set(Lang.Greek, "θα", 6.9);
         _dictionary.Add(Lang.Greek, "είπε");
         _dictionary.Add(Lang.Greek, "ότι");
         Decide("είπε", Lang.Greek);
@@ -158,6 +159,17 @@ public class DecisionEngineTests
 
         Decide("ua", Lang.English).Should().BeEquivalentTo(
             new Replace("ua", "θα", Lang.English, Lang.Greek, ReplaceReason.ShortWordInContext));
+    }
+
+    [Fact]
+    public void Short_word_needs_a_frequent_alternative()
+    {
+        // "tv" typed in Greek text: τω is an archaic dictionary entry (Zipf 4.77), not a reason to convert.
+        _dictionary.Add(Lang.Greek, "τω");
+        _frequency.Set(Lang.Greek, "τω", 4.77);
+        _engine.SeedContext(Lang.Greek);
+
+        Decide("tv", Lang.English).Should().Be(new Keep(KeepReason.TooShort));
     }
 
     [Fact]

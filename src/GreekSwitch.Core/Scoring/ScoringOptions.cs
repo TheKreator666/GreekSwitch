@@ -28,6 +28,12 @@ public sealed record ScoringOptions
     /// </summary>
     public double FrequencyMargin { get; init; } = 1.5;
 
+    /// <summary>
+    /// The short-word rule only converts to a common word (Zipf at least this), so rare or
+    /// archaic dictionary entries ("τω", "αι") can't turn "tv" or "ai" into Greek.
+    /// </summary>
+    public double ShortWordMinZipf { get; init; } = 5.0;
+
     /// <summary>Words with fewer keys are left alone unless the dictionary and context both say otherwise.</summary>
     public int MinLength { get; init; } = 3;
 }

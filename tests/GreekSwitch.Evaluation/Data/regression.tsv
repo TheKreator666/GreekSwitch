@@ -14,7 +14,7 @@
 # Office words typed in the EN layout inside Greek
 Θα σου στείλω email με το pdf	Θα σου στείλω email με το pdf
 Άνοιξε το Excel και το Teams	Άνοιξε το Excel και το Teams
-Βλέπω tv και διαβάζω για ai	Βλέπω tv και διαβάζω για ai	xfail	short-word rule must not take rare Greek alternatives (τω, αι)
+Βλέπω tv και διαβάζω για ai	Βλέπω tv και διαβάζω για ai		short-word rule must not take rare Greek alternatives (τω, αι)
 Έκλεισα το laptop και πήγα για coffee	Έκλεισα το laptop και πήγα για coffee
 
 # Greek loanword verbs
