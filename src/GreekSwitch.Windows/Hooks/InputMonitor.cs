@@ -19,6 +19,7 @@ public sealed class InputMonitor : IDisposable
     private Thread? _thread;
     private uint _threadId;
     private volatile bool _captureKeys;
+    private long _droppedKeys;
     private int _disposed;
 
     public ChannelReader<InputEvent> Events => _channel.Reader;
@@ -50,6 +51,12 @@ public sealed class InputMonitor : IDisposable
 
     /// <summary>Asks the worker to re-read the policy (enabled, paused, exclusions) from any thread.</summary>
     public void NotifyPolicyChanged() => _channel.Writer.TryWrite(new InputEvent(InputEventKind.PolicyChanged));
+
+    /// <summary>Queues an event for the worker from any thread (e.g. a UI Automation answer).</summary>
+    public void Post(InputEvent input) => _channel.Writer.TryWrite(input);
+
+    /// <summary>Typing keys pressed while capture was off; the word in progress when capture resumes is then incomplete.</summary>
+    public long DroppedKeys => Interlocked.Read(ref _droppedKeys);
 
     /// <summary>Starts the hook thread and waits until the hooks are installed (or failed).</summary>
     public Task StartAsync()
@@ -86,7 +93,7 @@ public sealed class InputMonitor : IDisposable
 
     private void Run()
     {
-        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead, Keyboard, AcceptForeignInjectedInput);
+        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead, Keyboard, AcceptForeignInjectedInput, () => Interlocked.Increment(ref _droppedKeys));
         using var mouse = new MouseHook(_channel.Writer);
         using var focus = new FocusWatcher(_channel.Writer);
         try

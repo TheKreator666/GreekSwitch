@@ -11,8 +11,10 @@ namespace GreekSwitch.Windows;
 /// <summary>
 /// Consumes hook events on a worker task and drives the <see cref="TypingSession"/>. It decides
 /// when to be fully passive (disabled, paused, excluded app, password field) and then tells the
-/// hook to stop capturing keys at all. A failure while processing one event is logged (type and
-/// stack trace, never text), the buffer is reset, and the worker carries on.
+/// hook to stop capturing keys at all. Password checks run on the UI Automation thread and come
+/// back as events; until one answers, capture stays off (fail closed). A failure while
+/// processing one event is logged (type and stack trace, never text), the buffer is reset, and
+/// the worker carries on.
 /// </summary>
 public sealed class CorrectionWorker
 {
@@ -22,9 +24,13 @@ public sealed class CorrectionWorker
     private readonly ILayoutSwitcher _layouts;
     private readonly IPasswordFieldDetector _passwords;
     private readonly ICorrectionPolicy _policy;
+    private static readonly TimeSpan PasswordCheckTimeout = TimeSpan.FromSeconds(3);
+
     private readonly ILogger _logger;
+    private readonly UiaThread _uia;
+    private readonly PasswordGate _gate = new();
     private bool _excluded;
-    private bool _passwordField;
+    private long _droppedWhenCaptureStopped;
 
     public CorrectionWorker(
         InputMonitor monitor,
@@ -33,8 +39,10 @@ public sealed class CorrectionWorker
         ILayoutSwitcher layouts,
         IPasswordFieldDetector passwords,
         ICorrectionPolicy policy,
+        UiaThread uia,
         ILogger logger)
     {
+        _uia = uia;
         _monitor = monitor;
         _session = session;
         _engine = engine;
@@ -77,11 +85,18 @@ public sealed class CorrectionWorker
                 OnForegroundChanged(input.Window);
                 break;
             case InputEventKind.FocusChanged:
-                OnFocusChanged();
+                OnFocusChanged(new FocusKey(input.Window, input.ChildId));
                 break;
             case InputEventKind.PolicyChanged:
                 _session.Reset();
-                UpdateCapture();
+                Refocus(_gate.Current);
+                break;
+            case InputEventKind.PasswordChecked:
+                OnPasswordChecked(new FocusKey(input.Window, input.ChildId), input.Check);
+                break;
+            case InputEventKind.SessionReset:
+                _session.Reset();
+                _engine.ClearContext();
                 break;
             case InputEventKind.HookError:
                 _logger.LogError("Keyboard hook callback failed: {Type}", input.ErrorType);
@@ -117,25 +132,60 @@ public sealed class CorrectionWorker
         _engine.ClearContext();
         var process = ProcessNames.FromWindow(window);
         _excluded = process is not null && _policy.IsExcluded(process);
-        _passwordField = !_excluded && _passwords.IsPasswordFieldFocused();
-        UpdateCapture();
-        _logger.LogDebug("Foreground changed: excluded {Excluded}, password field {Password}", _excluded, _passwordField);
+        var focus = KeyboardLayouts.ForegroundLayout().FocusWindow;
+        Refocus(new FocusKey(focus != 0 ? focus : window, 0));
     }
 
-    private void OnFocusChanged()
+    private void OnFocusChanged(FocusKey key)
     {
         _session.Reset();
         var process = ProcessNames.FromWindow(GetForegroundWindow());
         _excluded = process is not null && _policy.IsExcluded(process);
-        _passwordField = !_excluded && _passwords.IsPasswordFieldFocused();
+        Refocus(key);
+    }
+
+    /// <summary>Focus (or the policy) changed: block capture and ask UI Automation, unless the answer is known.</summary>
+    private void Refocus(FocusKey key)
+    {
+        if (_gate.OnFocus(key, wouldCapture: _policy.IsActive && !_excluded))
+        {
+            _ = _uia.RunAsync(_passwords.CheckFocused, PasswordCheckTimeout).ContinueWith(
+                t => _monitor.Post(InputEvent.PasswordChecked(key, t.Result.Answered ? t.Result.Value : null)),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnRanToCompletion,
+                TaskScheduler.Default);
+        }
+
         UpdateCapture();
+    }
+
+    private void OnPasswordChecked(FocusKey key, PasswordCheck? check)
+    {
+        if (check is null)
+        {
+            _logger.LogWarning("Password-field check timed out; staying passive in this field");
+        }
+
+        if (_gate.OnAnswer(key, check))
+        {
+            UpdateCapture();
+        }
     }
 
     private void UpdateCapture()
     {
-        var capture = _policy.IsActive && !_excluded && !_passwordField;
+        var capture = _policy.IsActive && !_excluded && !_gate.Blocked;
         if (capture != _monitor.CaptureKeys)
         {
+            if (capture && _monitor.DroppedKeys != _droppedWhenCaptureStopped)
+            {
+                _session.MarkPartial(); // keys were typed while capture was off
+            }
+            else if (!capture)
+            {
+                _droppedWhenCaptureStopped = _monitor.DroppedKeys;
+            }
+
             _monitor.CaptureKeys = capture;
 
             // Categories only: never the app name or any text.

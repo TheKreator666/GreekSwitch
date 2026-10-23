@@ -20,18 +20,20 @@ internal sealed class KeyboardHook : IDisposable
     private readonly Func<bool> _captureKeys;
     private readonly TypeAheadGuard _typeAhead;
     private readonly bool _acceptForeignInjected;
+    private readonly Action _keyDropped;
     private readonly HookProc _proc; // kept in a field so the GC can't collect the callback
     private nint _hook;
     private readonly LiveKeyboardState _keyboard;
     private bool _capsLock;
 
-    public KeyboardHook(ChannelWriter<InputEvent> writer, Func<bool> captureKeys, TypeAheadGuard typeAhead, LiveKeyboardState keyboard, bool acceptForeignInjected = false)
+    public KeyboardHook(ChannelWriter<InputEvent> writer, Func<bool> captureKeys, TypeAheadGuard typeAhead, LiveKeyboardState keyboard, bool acceptForeignInjected = false, Action? keyDropped = null)
     {
         _writer = writer;
         _captureKeys = captureKeys;
         _typeAhead = typeAhead;
         _keyboard = keyboard;
         _acceptForeignInjected = acceptForeignInjected;
+        _keyDropped = keyDropped ?? (() => { });
         _proc = Callback;
     }
 
@@ -89,6 +91,10 @@ internal sealed class KeyboardHook : IDisposable
                             typedCount,
                             focus,
                             layout));
+                    }
+                    else if (!VirtualKeys.IsModifier(vk))
+                    {
+                        _keyDropped(); // only counted, never queued: the word in progress is now incomplete
                     }
                 }
             }

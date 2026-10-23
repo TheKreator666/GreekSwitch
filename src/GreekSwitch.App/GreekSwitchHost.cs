@@ -18,14 +18,16 @@ namespace GreekSwitch.App;
 internal sealed class GreekSwitchHost : IDisposable
 {
     private readonly InputMonitor _monitor;
+    private readonly UiaThread _uia;
     private readonly DecisionEngine _engine;
     private readonly TypingSession _session;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _worker;
     private readonly ILogger _logger;
 
-    private GreekSwitchHost(InputMonitor monitor, DecisionEngine engine, TypingSession session, CorrectionWorker worker, ILogger logger)
+    private GreekSwitchHost(InputMonitor monitor, UiaThread uia, DecisionEngine engine, TypingSession session, CorrectionWorker worker, ILogger logger)
     {
+        _uia = uia;
         _monitor = monitor;
         _engine = engine;
         _session = session;
@@ -86,9 +88,10 @@ internal sealed class GreekSwitchHost : IDisposable
             throw;
         }
 
-        var worker = new CorrectionWorker(monitor, session, engine, layouts, new PasswordFieldDetector(), policy, logger);
+        var uia = new UiaThread();
+        var worker = new CorrectionWorker(monitor, session, engine, layouts, new PasswordFieldDetector(), policy, uia, logger);
         logger.LogInformation("GreekSwitch started");
-        return new GreekSwitchHost(monitor, engine, session, worker, logger);
+        return new GreekSwitchHost(monitor, uia, engine, session, worker, logger);
     }
 
     /// <summary>Applies changed settings. Safe from the UI thread: options are swapped atomically.</summary>
@@ -115,6 +118,7 @@ internal sealed class GreekSwitchHost : IDisposable
         }
 
         _stop.Dispose();
+        _uia.Dispose();
         _logger.LogInformation("GreekSwitch stopped");
     }
 

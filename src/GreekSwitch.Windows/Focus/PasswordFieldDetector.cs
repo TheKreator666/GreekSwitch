@@ -5,6 +5,9 @@ namespace GreekSwitch.Windows.Focus;
 public interface IPasswordFieldDetector
 {
     bool IsPasswordFieldFocused();
+
+    /// <summary>The focused element: is it a password box, and which window does it belong to.</summary>
+    PasswordCheck CheckFocused();
 }
 
 /// <summary>
@@ -16,8 +19,38 @@ public interface IPasswordFieldDetector
 public sealed class PasswordFieldDetector : IPasswordFieldDetector
 {
     private const int UiaIsPasswordPropertyId = 30019;
+    private const int UiaNativeWindowHandlePropertyId = 30020;
 
     private readonly Lazy<IUIAutomation> _automation = new(() => (IUIAutomation)new CUIAutomation());
+
+    public PasswordCheck CheckFocused()
+    {
+        IUIAutomationElement? element = null;
+        try
+        {
+            element = _automation.Value.GetFocusedElement();
+            if (element is null)
+            {
+                return new PasswordCheck(false, 0);
+            }
+
+            var isPassword = element.GetCurrentPropertyValue(UiaIsPasswordPropertyId) is true;
+            var window = element.GetCurrentPropertyValue(UiaNativeWindowHandlePropertyId) is int handle ? (nint)handle : 0;
+            return new PasswordCheck(isPassword, window);
+        }
+        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidOperationException)
+        {
+            // Focus moved again, or the app doesn't expose UI Automation: no password box we can see.
+            return new PasswordCheck(false, 0);
+        }
+        finally
+        {
+            if (element is not null)
+            {
+                Marshal.ReleaseComObject(element);
+            }
+        }
+    }
 
     public bool IsPasswordFieldFocused()
     {

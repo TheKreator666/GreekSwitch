@@ -85,6 +85,17 @@ public sealed class TypingSession
         }
     }
 
+    /// <summary>
+    /// Keys were typed that the session never saw (capture was off for a moment): the word in
+    /// progress is incomplete and must not be judged, and the run no longer matches the screen.
+    /// </summary>
+    public void MarkPartial()
+    {
+        _buffer.MarkTainted();
+        _run.Clear();
+        _undo.Disarm();
+    }
+
     /// <summary>A boundary the Windows layer saw: mouse click, focus change, caret keys and so on.</summary>
     public void Reset()
     {

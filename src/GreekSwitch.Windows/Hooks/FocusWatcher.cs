@@ -48,6 +48,6 @@ internal sealed class FocusWatcher : IDisposable
 
     private void Callback(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
     {
-        _writer.TryWrite(eventType == EVENT_SYSTEM_FOREGROUND ? InputEvent.Foreground(hwnd) : InputEvent.Focus(hwnd));
+        _writer.TryWrite(eventType == EVENT_SYSTEM_FOREGROUND ? InputEvent.Foreground(hwnd) : InputEvent.Focus(hwnd, idChild));
     }
 }

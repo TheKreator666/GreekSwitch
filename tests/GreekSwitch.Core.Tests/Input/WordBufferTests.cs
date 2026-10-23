@@ -104,6 +104,19 @@ public class WordBufferTests
     }
 
     [Fact]
+    public void Marking_tainted_flags_the_word_in_progress_only()
+    {
+        var buffer = new WordBuffer();
+        buffer.MarkTainted();
+        buffer.Append(K('A'), Lang.English);
+
+        buffer.Complete(Space)!.Tainted.Should().BeTrue();
+
+        buffer.Append(K('A'), Lang.English);
+        buffer.Complete(Space)!.Tainted.Should().BeFalse();
+    }
+
+    [Fact]
     public void A_word_glued_to_a_preceding_period_is_flagged()
     {
         var buffer = new WordBuffer();

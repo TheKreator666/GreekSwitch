@@ -74,6 +74,9 @@ public sealed class WordBuffer
         return true;
     }
 
+    /// <summary>Some keys of the current word were never seen: it will complete as tainted.</summary>
+    public void MarkTainted() => _tainted = true;
+
     /// <summary>Ends the current word at <paramref name="delimiter"/> and starts a new one.</summary>
     public CompletedWord? Complete(Delimiter delimiter)
     {
