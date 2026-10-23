@@ -6,12 +6,14 @@ namespace GreekSwitch.Core.Input;
 /// <param name="Delimiter">The key that ended the word.</param>
 /// <param name="FollowsPeriod">The word came straight after "word." with no space (a domain or file name).</param>
 /// <param name="Tainted">Backspace went past the start of the buffer, so the keys are only part of the word.</param>
+/// <param name="MixedLayout">The active layout changed partway through the word (the user switched it).</param>
 public sealed record CompletedWord(
     IReadOnlyList<KeyStroke> Keys,
     Lang Layout,
     Delimiter Delimiter,
     bool FollowsPeriod,
-    bool Tainted);
+    bool Tainted,
+    bool MixedLayout = false);
 
 /// <summary>
 /// The physical keys of the word being typed. Memory only, and wiped on every boundary and reset.
@@ -25,6 +27,7 @@ public sealed class WordBuffer
     private Lang _layout;
     private bool _tainted;
     private bool _followsPeriod;
+    private bool _mixedLayout;
 
     public IReadOnlyList<KeyStroke> Keys => new ArraySegment<KeyStroke>(_keys, 0, _count);
 
@@ -37,6 +40,10 @@ public sealed class WordBuffer
         if (_count == 0)
         {
             _layout = activeLayout;
+        }
+        else if (activeLayout != _layout)
+        {
+            _mixedLayout = true;
         }
 
         if (_count == _keys.Length)
@@ -72,7 +79,7 @@ public sealed class WordBuffer
     {
         CompletedWord? word = _count == 0
             ? null
-            : new CompletedWord(_keys[.._count], _layout, delimiter, _followsPeriod, _tainted);
+            : new CompletedWord(_keys[.._count], _layout, delimiter, _followsPeriod, _tainted, _mixedLayout);
 
         Clear();
         _followsPeriod = word is not null && delimiter is { Kind: DelimiterKind.Punctuation, Text: "." };
@@ -103,5 +110,6 @@ public sealed class WordBuffer
         Array.Clear(_keys); // the whole array, including slots freed by Pop
         _count = 0;
         _tainted = false;
+        _mixedLayout = false;
     }
 }

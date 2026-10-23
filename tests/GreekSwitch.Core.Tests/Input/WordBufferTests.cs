@@ -118,6 +118,20 @@ public class WordBufferTests
     }
 
     [Fact]
+    public void A_layout_switch_in_the_middle_of_a_word_is_flagged()
+    {
+        var buffer = new WordBuffer();
+        buffer.Append(K('H'), Lang.Greek);
+        buffer.Append(K('E'), Lang.Greek);
+        buffer.Append(K('L'), Lang.English); // Alt+Shift pressed between E and L
+
+        buffer.Complete(Space)!.MixedLayout.Should().BeTrue();
+
+        buffer.Append(K('A'), Lang.English);
+        buffer.Complete(Space)!.MixedLayout.Should().BeFalse();
+    }
+
+    [Fact]
     public void Restore_reloads_keys_for_continued_typing()
     {
         var buffer = new WordBuffer();

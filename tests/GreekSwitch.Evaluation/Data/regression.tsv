@@ -37,7 +37,7 @@ KALHMERA	ΚΑΛΗΜΕΡΑ		all caps, conventionally unaccented
 ΗΕΛΛΟ ΤΗΕΡΕ	HELLO THERE		all-caps English typed in the GR layout
 
 # Layout switched halfway through a word: must be left alone
-ηελ|lo	ηελlo	xfail	the hotkey isn't seen by the buffer, so the half-and-half word gets converted
+ηελ|lo	ηελlo		Alt+Shift mid-word: the word is half Greek, half English
 καλη|mera	καληmera
 
 # Whole sentences in the wrong layout

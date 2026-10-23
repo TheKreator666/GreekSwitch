@@ -53,7 +53,9 @@ public sealed class DecisionEngine
     }
 
     public Decision Decide(CompletedWord word) =>
-        word.Tainted ? new Keep(KeepReason.PartialWord) : Decide(word.Keys, word.Layout, word.FollowsPeriod);
+        word.Tainted ? new Keep(KeepReason.PartialWord)
+        : word.MixedLayout ? new Keep(KeepReason.MixedLayout)
+        : Decide(word.Keys, word.Layout, word.FollowsPeriod);
 
     public Decision Decide(IReadOnlyList<KeyStroke> keys, Lang currentLayout, bool followsPeriod = false)
     {

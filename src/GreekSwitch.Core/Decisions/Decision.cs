@@ -16,6 +16,9 @@ public enum KeepReason
 
     /// <summary>Backspace went past the start of the word, so it is incomplete.</summary>
     PartialWord,
+
+    /// <summary>The user switched layout in the middle of the word: it's half one, half the other.</summary>
+    MixedLayout,
 }
 
 public enum ReplaceReason
