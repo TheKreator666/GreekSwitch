@@ -1,176 +1,280 @@
-# GreekSwitch — Greek/English Layout Auto-Corrector
+# GreekSwitch
 
-## What we're building
-A Windows tray application that watches keystrokes in real time and, at each word boundary, detects words typed in the **wrong keyboard layout** (Greek vs English) and replaces them with the correct version. It also switches the active layout so the next words come out right.
-
-Example (typed with the wrong layout active for some words):
-
-```
-Input:  Θέλω να φτιάξω ένα αππλιψατιον poy ua κάνει πράξεις
-Output: Θέλω να φτιάξω ένα application που θα κάνει πράξεις
-```
-
-**Core principle:** buffer **physical keys (virtual-key codes)**, not characters. Every word then has two readings, Greek layout and English layout. We pick the more plausible one. Nothing is "translated"; the same keystrokes are re-interpreted.
-
-| Keys | Greek reading | English reading | Winner |
-|---|---|---|---|
-| A P P L I C A T I O N | αππλιψατιον | application | EN |
-| P O Y | πού / που | poy | GR |
-| U A | θα | ua | GR |
-
-## Deliverables
-1. A working, tested .NET solution (structure below).
-2. A **single-file, self-contained Windows executable**: `publish/GreekSwitch.exe`, runnable on a clean Windows 10/11 x64 machine with no .NET installed.
-3. A `README.md` covering how to run it, the settings, how undo works, and known limitations.
-
-## Tech stack
-- **C# / .NET 8**, nullable enabled, warnings as errors in `Core`.
-- **Core:** `net8.0`, pure logic with no Win32 dependencies, so it builds and tests on any OS.
-- **Windows layer + App:** `net8.0-windows`, WinForms tray app (`NotifyIcon`). Keep it simple; no WPF unless needed. Set `<EnableWindowsTargeting>true</EnableWindowsTargeting>` so it also *builds* on non-Windows machines.
-- **Spellcheck:** `WeCantSpell.Hunspell` (pure managed) with the LibreOffice `el_GR` and `en_US` Hunspell dictionaries. Check their licenses and record them in `THIRD_PARTY_NOTICES.md`.
-- **Tests:** xUnit and FluentAssertions.
-- **Win32 interop:** `[LibraryImport]` / P/Invoke written by hand, or `Microsoft.Windows.CsWin32`. Your choice; be consistent.
-
-## Solution structure
-```
-GreekSwitch.sln
-src/
-  GreekSwitch.Core/          # decoder, scorer, decision rules, word buffer (pure)
-  GreekSwitch.Windows/       # keyboard hook, SendInput, layout switching, UIA password detection
-  GreekSwitch.App/           # tray icon, settings, exclusions, startup wiring
-tests/
-  GreekSwitch.Core.Tests/
-  GreekSwitch.Windows.Tests/ # only things testable without a live desktop
-data/
-  dictionaries/              # el_GR.aff/.dic, en_US.aff/.dic
-  ngrams/                    # trigram models (generated, see below)
-tools/
-  NgramBuilder/              # console app: corpus text → trigram frequency file
-```
-
-## Architecture
+Windows tray app (.NET 8, WinForms) that watches physical keystrokes, and at each word boundary
+re-reads the word's keys in the other layout (Greek ↔ English). If the word was typed in the
+wrong layout it deletes it, types the right word, and switches the layout.
 
 ```
-WH_KEYBOARD_LL hook ──► Channel<KeyEvent> ──► worker thread
-                                              │
-                         WordBuffer (VK codes + shift/caps state)
-                                              │  at boundary
-                         DualDecoder → (greek, english)
-                                              │
-                         Scorer → scores + context prior
-                                              │
-                         DecisionEngine → Keep | Replace(text, targetLayout)
-                                              │
-                         Corrector → SendInput backspaces + unicode text,
-                                     switch layout
+Typed:  Θέλω να φτιάξω ένα αππλιψατιον poy ua κάνει πράξεις
+Result: Θέλω να φτιάξω ένα application που θα κάνει πράξεις
 ```
 
-### Core (`GreekSwitch.Core`)
-- **`KeyStroke`**: VK code, shift, caps lock, and whether it was a dead key.
-- **`WordBuffer`**: appends keys and pops on Backspace. `Reset()` is called on boundaries the Windows layer reports (mouse click, arrows, Home/End, focus change, Ctrl/Alt/Win combos, Esc). A word boundary is Space, Enter, Tab or punctuation; record which delimiter it was so the corrector can re-type it.
-- **`LayoutMap`**: VK → character for each layout.
-  - Ship a **static map** for the Greek (`00000408`) and US English (`00000409`) layouts. It is used in tests.
-  - Greek specifics to handle correctly:
-    - `VK_OEM_1` (`;` key) is the **tonos dead key**. `;` + vowel → accented vowel (ά έ ή ί ό ύ ώ). Shift+`;` is dialytika (ϊ ϋ), and the tonos+dialytika combination produces ΐ ΰ.
-    - `W` → ς, `S` → σ. Normalize σ/ς when matching against the dictionary, and emit ς at word end when outputting Greek.
-    - `Q` on the Greek layout produces `;` (the Greek question mark).
-  - The Windows layer must **verify the static map at startup** against the real OS layout using `ToUnicodeEx` and log any mismatch. Treat the OS as the source of truth where they differ, but make the tests pass on the static map.
-- **`DualDecoder`**: `(string greek, string english) Decode(IReadOnlyList<KeyStroke>)`. Preserves case patterns (all-caps, Capitalized, lower).
-- **`Scorer`**
-  - `IDictionaryService.IsWord(string word, Lang lang)`: Hunspell, **accent-insensitive** for Greek (strip tonos and dialytika, normalize final sigma, compare lowercased).
-  - `ITrigramModel.LogProb(string word, Lang lang)`: character trigrams with start/end padding and add-k smoothing, normalized by length.
-  - Combined: `score = (isWord ? W_dict : 0) + W_ngram * logProb + contextPrior`.
-  - `contextPrior`: a small bonus toward the language of the last 3 accepted words.
-  - Put all weights in a `ScoringOptions` record so they can be tuned.
-- **`DecisionEngine`** returns `Keep` or `Replace`. Rules, in order:
-  1. Skip if the word contains digits, `@`, `/`, `:` (URL-ish), `_`, or mixed camelCase.
-  2. Skip if the word is on the user's never-convert list.
-  3. Skip if the key count is below `MinLength` (default 3), *unless* the alternative is a dictionary word, the current reading is not, and the context prior agrees (this catches `θα`, `να`, `σε`).
-  4. Replace only if the current-layout reading is **not** a dictionary word **and** the alternative **is** one, **or** the trigram margin exceeds `ReplaceThreshold`.
-  5. Otherwise keep.
-- **`UndoTracker`**: remembers the last replacement. If the next key is Backspace, the engine requests a revert (restore the original text and switch the layout back) and adds the word to the never-convert list.
+**Status:** v1 is built, tested and published as a single-file exe. The work now is, in order:
+(1) a way to measure decision quality, (2) better recall on short, frequent words, (3) robustness,
+(4) hotkeys and UX, (5) office deployment, (6) loanword suggestions. The code is the source of
+truth for how things work; this file records what must stay true and what to do next.
 
-### Windows layer (`GreekSwitch.Windows`)
-- **`KeyboardHook`**: `SetWindowsHookEx(WH_KEYBOARD_LL)` on a dedicated thread with its own message loop.
-  - **The callback must return within a few milliseconds.** It only enqueues events to a `Channel<T>`. Windows silently unhooks slow callbacks.
-  - **Ignore events with `LLKHF_INJECTED`** so the app doesn't process its own `SendInput` output.
-- **`MouseHook`** (`WH_MOUSE_LL`): on a click, reset the buffer.
-- **`FocusWatcher`**: `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` resets the buffer and resolves the foreground process name for the exclusion list.
-- **`PasswordFieldDetector`**: UI Automation (`FocusedElement.Current.IsPassword`). Go fully passive while a password field is focused.
-- **`Corrector`**: `SendInput` sends N backspaces (word length plus the delimiter), then the corrected word and delimiter as `KEYEVENTF_UNICODE` events, all in one batch.
-- **`LayoutSwitcher`**: switches the foreground window to the target layout (`PostMessage(WM_INPUTLANGCHANGEREQUEST)` to the foreground window). Also reads the current layout via `GetKeyboardLayout(GetWindowThreadProcessId(foreground))`.
+**Target machines:** ordinary office laptops — Windows 10/11 x64 (some ARM), standard user
+without admin rights, antivirus/EDR, sometimes AppLocker/WDAC, often Remote Desktop or Citrix.
+Nothing may need installing besides the exe, and both Greek and English layouts must be installed in Windows.
 
-### App (`GreekSwitch.App`)
-- Tray icon with the menu: Enabled ✓, Pause for 5 min, Settings, Exit.
-- `settings.json` in `%APPDATA%\GreekSwitch\` holds: enabled, MinLength, thresholds, the excluded processes, and the never-convert list.
-- Default excluded processes: `WindowsTerminal.exe`, `cmd.exe`, `powershell.exe`, `pwsh.exe`, `Code.exe`, `devenv.exe`, `rider64.exe`, plus common games and launchers.
-- Single instance (named mutex).
-- Optional "Start with Windows" (HKCU Run key). **Off by default.**
+## Commands
 
-## Privacy and security (non-negotiable)
-- **No network access of any kind.** No telemetry, no update checks.
-- **Never write keystrokes or words to disk**, including logs. The logger may record events such as "replacement made, lang GR→EN, length 11" but **never the text**. Debug builds may log text only behind a `#if DEBUG` + explicit flag.
-- Keep the buffer in memory only, and clear it on every reset.
-- Be passive in password fields and excluded apps.
-- Add a short `SECURITY.md` explaining what the app captures, what it doesn't, and why.
-
-## N-gram models
-- `tools/NgramBuilder` takes plain-text corpora and writes `ngrams/el.tri` and `ngrams/en.tri` (a compact text or binary format; your choice, document it).
-- For corpus input, generate the training text **from the Hunspell dictionaries themselves**: expand the words with the affix rules where feasible, otherwise use the stems. This avoids downloading external corpora. If a better freely licensed corpus is easy to add later, leave a hook for it.
-- Commit the generated model files so the app build doesn't depend on running the tool.
-
-## Tests (must pass before packaging)
-`GreekSwitch.Core.Tests` should cover at least:
-- **Decoder:** every letter key in both layouts; tonos dead key + each vowel; dialytika; final sigma; Shift and Caps Lock case patterns; `Q` → `;` in Greek.
-- **End-to-end sentence tests** (key sequences in, corrected text out). Write a test helper that turns "what the user physically pressed" into `KeyStroke`s:
-  - `Θέλω να φτιάξω ένα αππλιψατιον poy ua κάνει πράξεις` → `Θέλω να φτιάξω ένα application που θα κάνει πράξεις`
-  - `ηελλο ςορλδ` → `hello world`
-  - `καλημέρα` stays unchanged.
-  - `hello` stays unchanged.
-  - `the` and `ok` stay unchanged (short, valid).
-  - `C#`, `user@mail.com`, `v2`, `myVariable` stay unchanged.
-  - Mixed sentence: `I love ελλάδα` → unchanged (both are valid words).
-- **Undo:** a replacement followed by Backspace yields the original text and adds the word to the never-convert list.
-- **Buffer:** a Backspace mid-word pops correctly; a reset clears it.
-- **No-text-in-logs test:** run the decision pipeline with a capturing logger and assert that none of the input words appear in the log output.
-
-`GreekSwitch.Windows.Tests`: test only the pure helpers (the `INPUT` struct builder for SendInput, mapping from VK to the static map). Don't test live hooks.
-
-Also add a **manual test checklist** in `docs/manual-test.md` covering Notepad, Word, Chrome, Teams/Slack, a password field, an excluded app (terminal), and undo.
-
-## Build and package
 ```bash
-dotnet restore
-dotnet build -c Release
-dotnet test -c Release
-dotnet publish src/GreekSwitch.App -c Release -r win-x64 --self-contained true \
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
-  -p:EnableCompressionInSingleFile=true -o publish
+dotnet build GreekSwitch.sln -c Release
+dotnet test GreekSwitch.sln -c Release                      # Core tests run on any OS; Windows tests need Windows
+dotnet test tests/GreekSwitch.Core.Tests -c Release --filter "FullyQualifiedName~SentenceTests"
+./build.ps1        # Windows: restore, build, test, publish → publish/GreekSwitch.exe (+ .sha256)
+./build.sh         # same, any OS (publish cross-targets win-x64)
 ```
-- Dictionaries and n-gram files: either embed them as resources (preferred, for a true single file) or copy them next to the exe. Pick one and document it.
-- Add `build.ps1` (Windows) and `build.sh` (cross-platform for restore, build, test and publish) that run the steps above and fail on any test failure.
-- Add a GitHub Actions workflow (`windows-latest`) that builds, tests, publishes and uploads `GreekSwitch.exe` as an artifact.
-- Note in the README that the exe is unsigned and antivirus tools may flag it because of the keyboard hook plus SendInput. Leave a placeholder step for code signing.
 
-## Development order (milestones)
-Work through these in order. Commit after each one, and don't move on while tests are red.
-1. **Scaffold:** solution, projects, `.editorconfig`, `Directory.Build.props` (nullable, LangVersion, TreatWarningsAsErrors for Core), and an empty test passing.
-2. **Decoder:** `LayoutMap`, `KeyStroke`, `DualDecoder`, and the full decoder test suite.
-3. **Dictionaries:** add the Hunspell files, `IDictionaryService` with accent-insensitive Greek matching, and its tests.
-4. **N-grams:** `NgramBuilder`, generated models, `ITrigramModel`, and tests that `ψατ`/GR scores low and `cat`/EN scores high.
-5. **Decision engine:** rules, context prior, undo, and the sentence tests passing.
-6. **Windows layer:** hook, focus, mouse, password detection, corrector, layout switcher, and the `ToUnicodeEx` verification.
-7. **App:** tray, settings, exclusions, single instance.
-8. **Packaging:** publish the single-file exe, build scripts, CI workflow, README, SECURITY.md, THIRD_PARTY_NOTICES.md, and the manual test checklist.
+Regenerate the trigram models with the commands in `data/ngrams/README.md`. Commit the output.
 
-## Coding conventions
-- Small, focused classes. Core has no static mutable state, and everything is injected through interfaces so it stays testable.
-- Use `async`/`Channel<T>` for the hook → worker handoff. Never block the hook thread.
-- Clean up all Win32 handles (`UnhookWindowsHookEx`, `UnhookWinEvent`) in `Dispose`, and on exit even after a crash (`AppDomain.ProcessExit`).
-- Never swallow exceptions on the worker thread. If the pipeline fails, log it (without text) and keep the hook alive.
+## Pipeline (as built)
 
-## Definition of done
-- `dotnet test` is green.
-- `publish/GreekSwitch.exe` launches on Windows, shows the tray icon, and correctly fixes the example sentence when typed in Notepad.
-- Undo works; terminals and password fields are untouched.
-- No keystroke text is written anywhere on disk.
+```
+KeyboardHook (hook thread, WH_KEYBOARD_LL) ─► Channel<InputEvent> ─► CorrectionWorker (worker task)
+  MouseHook, FocusWatcher (WinEvents) ──────┘                          │ passive? excluded app / password field / paused
+                                                                       ▼
+TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: DecisionEngine
+  DecisionEngine: DualDecoder (both readings) → Scorer (Hunspell + trigrams + ContextTracker) → rules → Keep | Replace
+  Replace → Corrector (ICorrectionOutput): guards → switch layout first → KeyPlanner real keys → one SendInput batch
+  UndoTracker: Backspace right after a correction reverts it and learns the word (as an HMAC hash)
+```
+
+| Area | Files |
+|---|---|
+| Key maps, decoding, retyping plan | `src/GreekSwitch.Core/Layout/` (`StaticLayouts`, `LayoutMap`, `DualDecoder`, `KeyPlanner`) |
+| Word buffer, key classification | `src/GreekSwitch.Core/Input/` |
+| Scoring, dictionaries, trigrams | `src/GreekSwitch.Core/Scoring/`, `src/GreekSwitch.Core/Text/` |
+| Decision rules, never-convert, undo | `src/GreekSwitch.Core/Decisions/` |
+| Per-key pipeline | `src/GreekSwitch.Core/Session/TypingSession.cs` |
+| Hooks, worker | `src/GreekSwitch.Windows/Hooks/`, `src/GreekSwitch.Windows/CorrectionWorker.cs` |
+| Output and its guards | `src/GreekSwitch.Windows/Output/` (`Corrector`, `InputBuilder`, `TypeAheadGuard`, `FocusGuard`) |
+| Layout read, switch, startup verification | `src/GreekSwitch.Windows/Layouts/` |
+| Focus, password fields, terminals | `src/GreekSwitch.Windows/Focus/` |
+| Tray, settings, logging, composition root | `src/GreekSwitch.App/` (`GreekSwitchHost` wires everything) |
+| Trigram model builder | `tools/NgramBuilder/` |
+| Tests | `tests/GreekSwitch.Core.Tests` (incl. `Support/TypingSimulator`), `tests/GreekSwitch.Windows.Tests` |
+| Docs | `README.md`, `SECURITY.md`, `THIRD_PARTY_NOTICES.md`, `docs/manual-test.md`, `docs/loanword-design.md` |
+
+## Invariants: do not break these
+
+**Privacy**
+- No network access of any kind.
+- No typed text in logs. Log calls take languages, lengths, reasons and exception *types* only;
+  never exception messages. `NoTextInLogsTests` must stay green and must cover any new log call
+  on the typing path.
+- Words learned from use (undo today; accepted suggestions later) are stored only as
+  HMAC-SHA256 hashes (key DPAPI-protected). The only readable words on disk are ones the user
+  typed into Settings, plus dictionary-derived replacement targets.
+- When capture is off (disabled, paused, excluded app, password field) the hook enqueues nothing.
+  `AppSettings.AlwaysExcludedProcesses` (password managers) can't be overridden by settings.
+- `WordBuffer` wipes its array. Don't add state that keeps typed text beyond the current word,
+  the single armed `UndoRecord`, and (milestone 11) the keys of the last few words of the current run.
+- Keep the WER exclusion and the `DropUnusedWpfNatives` target: nothing is extracted to disk at run time.
+- Any change to what is captured, stored or logged updates `SECURITY.md` in the same commit.
+
+**Input safety**
+- The hook callback only reads key/modifier state, enqueues, and returns. No COM/UI Automation,
+  no I/O, no locks, no waiting. Windows silently removes slow low-level hooks. The hook never
+  swallows keys, with one planned exception: Tab while a loanword suggestion is visible
+  (`docs/loanword-design.md`), decided by reading a single volatile flag.
+- Ignore events with `LLKHF_INJECTED` (our own output also carries `InputBuilder.Signature`).
+- A correction either happens completely or not at all. `Corrector.Replace` checks, in order:
+  modifier held → focus moved → Enter/Tab into a command window → Shift held → switch layout
+  and wait for it → user typed ahead → focus moved again. Any failure returns false and sends nothing.
+- Switch the layout *before* typing, and type **real keys** of the target layout (`KeyPlanner`).
+  Unicode injection is only the fallback; Windows 11 Notepad mangles it right after a switch.
+- Never retype Enter or Tab into a terminal or IDE (`CommandWindows`).
+- The OS layout wins over `StaticLayouts` (`LayoutVerifier`); tests use the static maps.
+- Run as a standard user (`asInvoker`); never request elevation, open ports, pipes or other endpoints.
+
+**Decision quality**
+- False positives (changing a correctly typed word) cost far more than misses. Any change to
+  scoring, rules or data must be measured with the evaluation harness (milestone 9) and must not
+  raise the false-positive rate. Put before/after numbers in the commit message.
+
+## Baseline measurements (2026-10-24)
+
+Measured with an external Python port of `Core` (spylls instead of WeCantSpell) over the 5,000
+most frequent words of each language (wordfreq), weighted by word frequency, each word judged
+in isolation. Treat these as approximate and replace them with the C# harness numbers from milestone 9.
+
+| Scenario | Result |
+|---|---|
+| Greek typed correctly, Greek context: words wrongly changed | 0.03% |
+| English typed correctly: words wrongly changed | ~0% |
+| Greek typed in the EN layout: corrected (no context / Greek context) | 68% / 70% |
+| English typed in the GR layout: corrected (no context / English context) | 72% / 85% |
+
+What's missed is the most frequent words, because their other reading is also "a word":
+`to`(το) `na`(να) `toy`(του) `me`(με) `den`(δεν) `ton`(τον) `soy`(σου) `saw`(σας) `mia`(μια),
+and `was`(ςασ) `are` `one` `set` `top` `stop`. Known false positives: `tv`→`τω` and `ai`→`αι`
+in Greek context (short-word rule), `Τραμπ`→`Tramp` (a Greek name not in el_GR whose other
+reading is an English word), lowercase acronyms such as `οηε`. Office jargon typed in the EN
+layout inside Greek text (`ok`, `pc`, `email`, `pdf`, `Teams`, `Excel`) and Greek loanword
+verbs (`τσεκάρω`, `ποστάρω`) were kept correctly.
+
+## Next milestones (in order)
+
+Commit after each milestone and keep tests green. Each milestone ends with updated docs
+(README, SECURITY.md if privacy-relevant, THIRD_PARTY_NOTICES.md if a dependency or data file
+was added, `docs/manual-test.md` if Windows behaviour changed, and this file).
+
+### 9. Frequency-weighted evaluation harness
+The current `FalsePositiveTests` sample the dictionaries uniformly and skip words under 3
+letters and capitalised names. That measures the easy cases. Running text is dominated by
+short function words, names and acronyms.
+- Add `tests/GreekSwitch.Evaluation` (test-only, never shipped) that reads a frequency list per
+  language (word + count). Use wordfreq's exported lists or another corpus; record the source and
+  license in the project README. wordfreq data is CC BY-SA 4.0, which is fine for test data.
+- Word-level scenarios, each reported frequency-weighted with the top offenders listed:
+  - correct Greek with Greek context;
+  - correct English with English context;
+  - Latin tokens inside Greek prose;
+  - each language typed in the wrong layout, with no context and with the intended language as context.
+- Sentence-level simulation (through `TypingSimulator`, layout switches followed): take real
+  sentences and start typing in the wrong layout at a random word. Report corrected words, wrongly
+  changed words and words left wrong.
+- A hand-written regression file of mixed sentences with real capitalisation:
+  - names and acronyms: `Τραμπ`, `ΟΗΕ`, `ΔΕΗ`;
+  - office words typed in the EN layout: `Teams`, `Excel`, `email`, `pdf`, `tv`, `ai`;
+  - Greek loanword verbs: `τσεκάρω`, `ποστάρω`;
+  - punctuation around words: `poy,`, `(ua`, and `tiq` (= `τι;`);
+  - apostrophes and elision: `don't`, `σ' αγαπώ`, `απ' το`;
+  - sentence-initial capitals and ALL-CAPS words;
+  - a word where the user switches layout halfway (Alt+Shift or Win+Space). It must be left alone.
+- CI gate: fail if a false-positive rate rises above its committed baseline. Print the full table.
+
+### 10. Decision-quality fixes (measure each one separately)
+a. **Final-sigma position is evidence.** A Greek reading with ς anywhere except the end (`ςασ`,
+   `ςαντ`, `ςε`) is not Greek. Don't normalise it away in `HunspellDictionaryService.IsGreekWord`
+   or `TrigramText`. Expected: a small recall gain for English typed in the GR layout and no false-positive cost.
+b. **Case-aware dictionary matching.** A lowercase reading must not match only a capitalised
+   entry: `na`/`Na`, `se`/`Se`, `ti`/`Ti`, `ta`/`Ta` and names. Remove the `Capitalize(...)`
+   fallbacks for lowercase input in both languages; keep them for capitalised input. Expected:
+   Greek recall in context +6 points. Verify on the capitalised regression file (milestone 9),
+   because lowercase frequency lists overstate the cost.
+c. **Frequency plus context when both readings are words.** Embed a compact frequency table
+   (Zipf, top ~50k words per language). License and attribution go in THIRD_PARTY_NOTICES.md;
+   CC BY-SA data (e.g. wordfreq) can be embedded but the table itself stays under CC BY-SA.
+   Rule: ≥ 2 keys, both readings are words, context majority is the other language, and the other
+   reading's Zipf is ≥ 1.5 higher → replace. Expected: recall in context of about 86% for Greek
+   and 89% for English, at the same false-positive rate. Single letters stay excluded.
+d. **Short-word rule requires a frequent alternative** (e.g. Zipf ≥ 5), so rare/archaic entries
+   (`τω`, `αι`) can't trigger it. This removes the `tv`/`ai` false positives.
+e. Make the "both readings are dictionary words → never replaced by the trigram margin" behaviour
+   explicit in `DecisionEngine` and covered by a test. The README claims it; today only the margin size keeps it true.
+
+### 11. Retroactive correction of the previous word(s)
+Context is only established after the first confident correction, so a wrong-layout sentence
+keeps its first function words: `den θέλω`. Keep the last 1–3 completed words of the current
+run (same field, no reset, separated only by spaces; keys only, wiped on reset). After a
+confident replacement, re-judge them with the new context. If they now convert, fix them in the
+same SendInput batch (one backspace count across the run). Undo must revert the whole batch.
+Same guards apply. Add tests in `TypingSimulator`.
+
+### 12. Robustness
+- **Check the text before replacing it.** Other tools can rewrite a word after you press Space:
+  Word AutoCorrect, Windows text suggestions, Grammarly, autocomplete. Blind backspaces would then
+  delete the wrong characters. Where the focused control supports UI Automation `TextPattern`,
+  read the text before the caret (on the UIA thread below, with a short timeout) and abort the
+  correction if it doesn't end with the expected word + delimiter. Where it isn't supported,
+  keep today's guards; don't drop to suggest-only.
+- **Capture the layout in the hook.** The hook already calls `KeyboardLayouts.ForegroundLayout()`;
+  pass the HKL in `InputEvent` and use it in `CorrectionWorker.OnKey` instead of reading the
+  layout when the worker gets to the key (wrong if the worker lags and the user switched).
+- **Health and watchdog.** If the worker task faults or the hook stops delivering keys while
+  `GetLastInputInfo` shows keyboard activity, reinstall the hook or restart the worker, and show an
+  error state on the tray icon. Today the tray says "on" even when the worker is dead.
+  Reset the buffer on lock, unlock and resume (`WTSRegisterSessionNotification`, `WM_POWERBROADCAST`).
+- **UI Automation off the hot path.** `PasswordFieldDetector` runs on every focus event on the
+  worker thread. Slow apps then delay key processing, and every query keeps Chrome's
+  accessibility tree switched on. Move it to its own thread with a timeout. Cache the result per
+  focused HWND, and only query while capture would otherwise be on. Until it answers, treat the
+  field as a password field (fail closed).
+- **Remote sessions and VMs.** Keys sent to `mstsc.exe`, Citrix (`wfica32.exe`, `CDViewer.exe`),
+  `vmconnect.exe`, VMware and VirtualBox consoles, AnyDesk and TeamViewer are decoded with the
+  *local* layout, while the remote side has its own. Add them to `DefaultExcludedProcesses`.
+- **Layout-switch fallback.** Some apps ignore `WM_INPUTLANGCHANGEREQUEST`. When
+  `Corrector.EnsureLayout` times out, try the user's own switch hotkey (Alt+Shift, Ctrl+Shift or
+  Win+Space, read from `HKCU\Keyboard Layout\Toggle`) once before giving up.
+- `SettingsStore.Load`: when settings.json fails to parse, keep a copy (`settings.json.bad`) before
+  writing defaults. Today a typo silently wipes the user's settings.
+- `FileLogger`: also catch `UnauthorizedAccessException`. A logging failure inside the worker's
+  catch block can kill the worker.
+- Measure the working set with el_GR loaded. If it's large, replace Hunspell lookups with a
+  build-time hash set of normalised affix-expanded forms (the NgramBuilder already expands them).
+  That is one probe instead of dozens of accent-variant checks per non-dictionary word.
+- Extend `docs/manual-test.md` with: Remote Desktop/Citrix (must be passive), an app run as
+  administrator (correction skipped and logged), a UWP/Store app, Google Docs, Word with
+  AutoCorrect on, Grammarly, Windows text suggestions, NVDA/Narrator running, and a
+  high-DPI multi-monitor setup.
+
+### 13. Hotkeys and everyday UX
+Detection will never be perfect, so give the user an escape hatch.
+- **Convert last word:** a hotkey converts the last word, even one the engine kept. It counts as
+  a correction for undo, and the opposite choice is learned (hashed).
+- **Convert selection:** a hotkey converts the selected text — copy, convert, paste, then restore
+  the clipboard (all formats). This fixes whole sentences typed in the wrong layout.
+- **Toggle on/off:** a hotkey for the same switch as the tray menu's Enabled.
+- Make all hotkeys configurable, with defaults that don't clash with Windows or Office shortcuts.
+  Register them with `RegisterHotKey` on the UI thread, not in the hook.
+- **Feedback:** a brief tray-icon flash when a correction happens, so users notice it and know
+  Backspace undoes it. Optional, on by default.
+- **First run:** check that a Greek and an English layout are installed (`KeyboardLayouts.FindInstalled`)
+  and explain how to add the missing one if not. Show a short note on what is captured (link to
+  SECURITY.md), and offer Start with Windows (off by default).
+- **Accidental Caps Lock** (optional, off by default): a word with an inverted case pattern
+  (`hELLO`) while Caps Lock is on becomes `Hello`, and Caps Lock is turned off.
+- **Per-app mode** — auto / suggest-only / off — replaces the plain exclusion list. Suggest-only
+  depends on the popup from milestone 15, so add that mode with it.
+
+### 14. Office deployment
+- **Code signing:** the CI step exists as a placeholder. Signing is what gets past SmartScreen and
+  makes EDR and AppLocker/WDAC allow-listing practical (allow by publisher instead of by hash).
+- **ARM64:** publish `win-arm64` alongside `win-x64` in `build.ps1`, `build.sh` and CI.
+- **IT-managed settings:** read optional policy values from
+  `HKLM\Software\Policies\GreekSwitch` (and HKCU). Cover: enabled, excluded apps, extra
+  always-excluded apps, disable undo learning, disable loanword suggestions. Policy values
+  override user settings and are shown as locked in Settings.
+- **Optional MSI or MSIX package** for software-distribution tools. The single exe stays the main deliverable.
+- **README "For IT" section:**
+  - why antivirus may flag the app (global hook + SendInput), and how to verify the SHA-256;
+  - AppLocker/WDAC rules;
+  - the UIPI limit: no corrections in apps run as administrator;
+  - the requirement for both layouts;
+  - the policy keys.
+
+### 15. Loanword suggestions (`κοντέινερ` → `container`)
+Build it as designed in **`docs/loanword-design.md`**:
+- phonetic matching through a shared phoneme alphabet: Greek by rules, English from CMUdict, compared by weighted edit distance;
+- candidates found with a skeleton index plus SymSpell deletions;
+- three tiers: user pairs replace automatically; strong matches on non-dictionary words replace automatically (off by default); everything else is a suggestion popup accepted with Tab;
+- privacy-preserving storage of learned pairs;
+- a 5 ms median-lookup test.
+
+Follow that doc's build order.
+
+### 16. Later (design note first, then build)
+- **Hold-and-release input.** Let the hook swallow the delimiter (and keys typed while a decision
+  is pending), then inject correction + delimiter + held keys. This would allow correcting words
+  ended by Enter (chat apps) and remove skipped corrections for fast typists. It's high risk:
+  it needs a hard timeout so input can never get stuck.
+- **Layouts:**
+  - map Greek Polytonic separately rather than as Greek;
+  - support both US and UK English installed at once (verify each installed English HKL, not just the first);
+  - let the user choose the pair when three or more layouts are installed.
+- **Greeklish direction** (`kalimera` → `καλημέρα`) reusing the loanword engine. See the end of
+  `docs/loanword-design.md` for the memory caveat.
+
+## Conventions
+- Small classes; Core has no Win32 and no static mutable state; dependencies through interfaces.
+- `TreatWarningsAsErrors` in Core; central package versions in `Directory.Packages.props`.
+- Keep FluentAssertions on 7.x (8.x is commercially licensed). Any new shipped dependency or
+  data file needs a license check and an entry in `THIRD_PARTY_NOTICES.md`.
+- Build-time data (trigram models, frequency table, phonetic index) is generated by a tool under
+  `tools/`, committed, and embedded as a resource. Never parse large text data at app start.
+- Never swallow exceptions on the worker: log the type and stack (no message), reset, continue.
+- Windows-layer behaviour changes need a pass through `docs/manual-test.md` on a real machine.
