@@ -95,18 +95,21 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
   scoring, rules or data must be measured with the evaluation harness (milestone 9) and must not
   raise the false-positive rate. Put before/after numbers in the commit message.
 
-## Baseline measurements (2026-10-24)
+## Baseline measurements (2026-10-24, C# evaluation harness, milestone 9)
 
-Measured with an external Python port of `Core` (spylls instead of WeCantSpell) over the 5,000
-most frequent words of each language (wordfreq), weighted by word frequency, each word judged
-in isolation. Treat these as approximate and replace them with the C# harness numbers from milestone 9.
+`tests/GreekSwitch.Evaluation`: the 5,000 most frequent words of each language (wordfreq),
+weighted by frequency, each judged in isolation with the stated context; plus 400 Tatoeba
+sentences per language. (An earlier Python port gave 0.03% / 68% / 70% / 72% / 85%.)
 
 | Scenario | Result |
 |---|---|
-| Greek typed correctly, Greek context: words wrongly changed | 0.03% |
-| English typed correctly: words wrongly changed | ~0% |
-| Greek typed in the EN layout: corrected (no context / Greek context) | 68% / 70% |
-| English typed in the GR layout: corrected (no context / English context) | 72% / 85% |
+| Greek typed correctly, Greek context: words wrongly changed | 0.02% |
+| English typed correctly, English context: words wrongly changed | 0.00% |
+| Latin tokens inside Greek prose: wrongly changed (unweighted, 118 tokens) | 1.69% (`tv`, `ai`) |
+| Greek typed in the EN layout: corrected (no context / Greek context) | 67.7% / 70.1% |
+| English typed in the GR layout: corrected (no context / English context) | 71.8% / 84.5% |
+| Sentences, Greek: wrong-layout words corrected / correct words wrongly changed | 73.8% / 0.05% |
+| Sentences, English: wrong-layout words corrected / correct words wrongly changed | 78.5% / 0.43% (names: `Sami`, `Rima`) |
 
 What's missed is the most frequent words, because their other reading is also "a word":
 `to`(το) `na`(να) `toy`(του) `me`(με) `den`(δεν) `ton`(τον) `soy`(σου) `saw`(σας) `mia`(μια),

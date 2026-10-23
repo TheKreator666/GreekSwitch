@@ -1,11 +1,12 @@
 using System.Text;
+using GreekSwitch.Core;
 using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Input;
 using GreekSwitch.Core.Layout;
 using GreekSwitch.Core.Scoring;
 using GreekSwitch.Core.Session;
 
-namespace GreekSwitch.Core.Tests.Support;
+namespace GreekSwitch.TestSupport;
 
 /// <summary>
 /// A text box plus a typist. Keys reach the "screen" first, decoded with the active layout,
@@ -14,7 +15,8 @@ namespace GreekSwitch.Core.Tests.Support;
 /// </summary>
 public sealed class TypingSimulator : ICorrectionOutput
 {
-    private const string DelimiterChars = " .,!?()[]{}\"-\n\t";
+    /// <summary>Characters the simulator types as word boundaries (the classifier's delimiters plus whitespace).</summary>
+    public const string DelimiterChars = " .,!?()[]{}\"-\n\t";
 
     private readonly StringBuilder _committed = new();
     private readonly List<KeyStroke> _pending = [];
@@ -29,7 +31,7 @@ public sealed class TypingSimulator : ICorrectionOutput
     /// typing in whichever layout each word shows.
     /// </param>
     public TypingSimulator(
-        LanguageDataFixture data,
+        ILanguageData data,
         bool followLayoutSwitches = true,
         ScoringOptions? scoring = null,
         SessionOptions? session = null,
@@ -38,8 +40,7 @@ public sealed class TypingSimulator : ICorrectionOutput
         _followLayoutSwitches = followLayoutSwitches;
         NeverConvert = new NeverConvertList(neverConvert);
         Logger = new CapturingLogger();
-        var decoder = new DualDecoder(StaticLayouts.Greek, StaticLayouts.English);
-        Engine = new DecisionEngine(decoder, new Scorer(data.Dictionaries, data.Trigrams), NeverConvert, scoring);
+        Engine = EngineFactory.Create(data, NeverConvert, scoring);
         Session = new TypingSession(
             Engine,
             new KeyClassifier(StaticLayouts.Greek, StaticLayouts.English),
@@ -103,6 +104,69 @@ public sealed class TypingSimulator : ICorrectionOutput
         return this;
     }
 
+    /// <summary>
+    /// Types the keys a <paramref name="intended"/>-language typist presses for <paramref name="text"/>,
+    /// whatever layout is active: the situation where the user forgot to switch. Returns each
+    /// word with whether it was typed while the wrong layout was active.
+    /// </summary>
+    public IReadOnlyList<(string Word, bool WrongLayout)> TypeIntended(string text, Lang intended)
+    {
+        var words = new List<(string, bool)>();
+        var word = new StringBuilder();
+
+        void Flush()
+        {
+            if (word.Length == 0)
+            {
+                return;
+            }
+
+            words.Add((word.ToString(), ActiveLayout != intended));
+            foreach (var key in Typist.Type(word.ToString(), intended))
+            {
+                Press(new KeyInput(key.VirtualKey, key.Shift, key.CapsLock));
+            }
+
+            word.Clear();
+        }
+
+        foreach (var c in text)
+        {
+            if (DelimiterChars.Contains(c, StringComparison.Ordinal))
+            {
+                Flush();
+                Press(DelimiterKey(c));
+            }
+            else
+            {
+                word.Append(c);
+            }
+        }
+
+        Flush();
+        return words;
+    }
+
+    /// <summary>The user's layout is (wrongly) <paramref name="layout"/> from now on.</summary>
+    public TypingSimulator SetActiveLayout(Lang layout)
+    {
+        ActiveLayout = layout;
+        _started = true;
+        return this;
+    }
+
+    /// <summary>The user presses the layout hotkey (Alt+Shift), possibly in the middle of a word.</summary>
+    public TypingSimulator SwitchLayoutWithHotkey()
+    {
+        // What is already on screen stays as it was typed.
+        _committed.Append(_decoder.Decode(_pending, ActiveLayout));
+        _pending.Clear();
+        Press(new KeyInput(VirtualKeys.LMenu, Alt: true));
+        Press(new KeyInput(VirtualKeys.LShift, Shift: true, Alt: true));
+        ActiveLayout = ActiveLayout.Other();
+        return this;
+    }
+
     public TypingSimulator Backspace() => Press(new KeyInput(VirtualKeys.Back));
 
     public TypingSimulator Press(KeyInput key)
@@ -158,6 +222,11 @@ public sealed class TypingSimulator : ICorrectionOutput
 
     private void ApplyToScreen(KeyInput key)
     {
+        if (VirtualKeys.IsModifier(key.VirtualKey))
+        {
+            return;
+        }
+
         switch (key.VirtualKey)
         {
             case VirtualKeys.Back when _pending.Count > 0:

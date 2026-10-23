@@ -16,10 +16,12 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+    <Using Include="GreekSwitch.TestSupport" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\GreekSwitch.Core\GreekSwitch.Core.csproj" />
+    <ProjectReference Include="..\GreekSwitch.TestSupport\GreekSwitch.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

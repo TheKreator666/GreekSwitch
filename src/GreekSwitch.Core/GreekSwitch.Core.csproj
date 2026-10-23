@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GreekSwitch.Core.Tests" />
+    <InternalsVisibleTo Include="GreekSwitch.TestSupport" />
+    <InternalsVisibleTo Include="GreekSwitch.Evaluation" />
   </ItemGroup>
 
 </Project>

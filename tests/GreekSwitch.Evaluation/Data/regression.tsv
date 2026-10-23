@@ -1,0 +1,46 @@
+# Hand-written regression sentences with real capitalisation.
+# Columns: typed <TAB> expected <TAB> tags <TAB> note
+# "typed" is what appears with no corrector running: each word's script says which layout was
+# active while typing it. '|' inside a word = the user pressed the layout hotkey (Alt+Shift) there.
+# Tag "xfail" = known wrong today; the test reports it, and fails once it starts passing so the
+# tag gets removed.
+
+# Names and acronyms
+Ο Τραμπ μίλησε χθες	Ο Τραμπ μίλησε χθες	xfail	Greek name not in el_GR whose other reading is English (Tramp)
+Η ΔΕΗ ανέβασε τις τιμές	Η ΔΕΗ ανέβασε τις τιμές		acronym
+Ο ΟΗΕ συνεδρίασε σήμερα	Ο ΟΗΕ συνεδρίασε σήμερα		acronym
+ο οηε συνεδρίασε σήμερα	ο οηε συνεδρίασε σήμερα	xfail	lowercase acronym
+
+# Office words typed in the EN layout inside Greek
+Θα σου στείλω email με το pdf	Θα σου στείλω email με το pdf
+Άνοιξε το Excel και το Teams	Άνοιξε το Excel και το Teams
+Βλέπω tv και διαβάζω για ai	Βλέπω tv και διαβάζω για ai	xfail	short-word rule must not take rare Greek alternatives (τω, αι)
+Έκλεισα το laptop και πήγα για coffee	Έκλεισα το laptop και πήγα για coffee
+
+# Greek loanword verbs
+Θα το τσεκάρω αύριο	Θα το τσεκάρω αύριο
+Μόλις το ποστάρισα	Μόλις το ποστάρισα
+
+# Punctuation around words
+Πες μου poy, είμαι	Πες μου που, είμαι
+Νομίζω ότι (ua έρθει)	Νομίζω ότι (θα έρθει)
+Και tiq	Και τι;		Q is the Greek question mark
+
+# Apostrophes and elision
+I don't know	I don't know
+σ' αγαπώ πολύ	σ' αγαπώ πολύ
+απ' το σπίτι	απ' το σπίτι
+
+# Capitals
+Kalhm;era se ;oloys	Καλημέρα σε όλους	xfail	sentence-initial capital; "se" must not count as English because of "Se"
+KALHMERA	ΚΑΛΗΜΕΡΑ		all caps, conventionally unaccented
+ΗΕΛΛΟ ΤΗΕΡΕ	HELLO THERE		all-caps English typed in the GR layout
+
+# Layout switched halfway through a word: must be left alone
+ηελ|lo	ηελlo	xfail	the hotkey isn't seen by the buffer, so the half-and-half word gets converted
+καλη|mera	καληmera
+
+# Whole sentences in the wrong layout
+den θέλω να έρθω	δεν θέλω να έρθω	xfail	first word has no context yet (milestone 11)
+τηε ψατ ις ον τηε ταβλε	the cat is on the table	xfail	"ον" is also Greek
+αππλιψατιον	application

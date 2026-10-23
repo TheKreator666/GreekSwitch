@@ -208,6 +208,28 @@ The static Greek/US layout maps were checked against Windows 11 with `ToUnicodeE
 the app re-verifies them against the installed layouts and follows the OS wherever they
 differ (each difference is logged).
 
+## Measuring decision quality
+
+`tests/GreekSwitch.Evaluation` (test-only, never shipped) runs the decision engine over:
+
+- the 5,000 most frequent words of each language, **weighted by frequency**, typed correctly and
+  typed in the wrong layout, with and without context;
+- Latin-script words Greeks type on purpose (`email`, `pdf`, `Teams`, `tv`…) inside Greek text;
+- 400 real sentences per language, typed as if the user forgot to switch layout from a random
+  word on, with the app's layout switches applied to the following words;
+- `Data/regression.tsv`: hand-written mixed sentences (names, acronyms, punctuation, elision,
+  capitals, a layout switched mid-word). Known failures are tagged `xfail`.
+
+It prints the full table (also written to `evaluation-report.md` next to the test binaries and
+to the CI job summary), and fails if any "wrongly changed" rate rises above
+`Data/baseline.json`. After an intended improvement, regenerate the baseline with
+`GREEKSWITCH_UPDATE_BASELINE=1 dotnet test tests/GreekSwitch.Evaluation`, and commit it along
+with the before/after numbers.
+
+Data sources: word frequencies from **wordfreq** (data CC BY-SA 4.0), exported by
+`tools/FrequencyExport/export_wordfreq.py` into `data/frequency/`; sentences from **Tatoeba**
+(CC BY 2.0 FR), sampled by `tools/FrequencyExport/sample_tatoeba.py`. See THIRD_PARTY_NOTICES.md.
+
 ## Licenses
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Greek dictionary is MPL 1.1 / GPL 2 /

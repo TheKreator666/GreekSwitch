@@ -40,6 +40,16 @@ public sealed class DecisionEngine
 
     public void ClearContext() => _context.Clear();
 
+    /// <summary>Tests and evaluation: make the recent words all <paramref name="lang"/>.</summary>
+    internal void SeedContext(Lang lang)
+    {
+        _context.Clear();
+        for (var i = 0; i < _options.ContextWindow; i++)
+        {
+            _context.Record(lang, _options.ContextWindow);
+        }
+    }
+
     public Decision Decide(CompletedWord word) =>
         word.Tainted ? new Keep(KeepReason.PartialWord) : Decide(word.Keys, word.Layout, word.FollowsPeriod);
 

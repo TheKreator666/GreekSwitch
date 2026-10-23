@@ -1,9 +1,10 @@
 using GreekSwitch.Core.Scoring;
+using GreekSwitch.TestSupport;
 
 namespace GreekSwitch.Core.Tests.Support;
 
 /// <summary>Loads the real embedded dictionaries and trigram models once for all tests that need them.</summary>
-public sealed class LanguageDataFixture
+public sealed class LanguageDataFixture : ILanguageData
 {
     public LanguageDataFixture()
     {

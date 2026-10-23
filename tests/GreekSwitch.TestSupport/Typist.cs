@@ -1,6 +1,7 @@
+using GreekSwitch.Core;
 using GreekSwitch.Core.Layout;
 
-namespace GreekSwitch.Core.Tests.Support;
+namespace GreekSwitch.TestSupport;
 
 /// <summary>
 /// Turns "what the user physically pressed" into key strokes: given the text that appeared and

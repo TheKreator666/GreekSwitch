@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace GreekSwitch.Core.Tests.Support;
+namespace GreekSwitch.TestSupport;
 
 /// <summary>Records every formatted log line plus every structured argument, at every level.</summary>
 public sealed class CapturingLogger : ILogger
