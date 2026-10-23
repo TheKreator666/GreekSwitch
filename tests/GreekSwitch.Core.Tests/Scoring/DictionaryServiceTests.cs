@@ -15,7 +15,6 @@ public class DictionaryServiceTests(LanguageDataFixture data)
     [InlineData("Καλημέρα")]
     [InlineData("καλημέρά")]      // tonos on the wrong vowel still normalises to the same word
     [InlineData("πράξεισ")]       // final sigma typed with S
-    [InlineData("ςας")]           // initial sigma typed with W
     [InlineData("ελλάδα")]        // proper noun typed in lowercase
     [InlineData("θέλω")]
     [InlineData("να")]
@@ -33,6 +32,8 @@ public class DictionaryServiceTests(LanguageDataFixture data)
     [InlineData("αππλιψατιον")]
     [InlineData("ηελλο")]
     [InlineData("ςορλδ")]
+    [InlineData("ςασ")]           // "was" typed in the GR layout: ς mid-word can't be Greek, even though σας is
+    [InlineData("ςαντ")]          // "want"
     [InlineData("hello")]         // right word, wrong language
     public void Greek_rejects_non_words(string word)
     {

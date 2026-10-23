@@ -47,6 +47,13 @@ public class TrigramModelTests(LanguageDataFixture data, ITestOutputHelper outpu
     }
 
     [Fact]
+    public void Final_sigma_in_the_middle_of_a_word_is_penalised()
+    {
+        _model.LogProb("ςασ", Lang.Greek).Should().BeLessThan(_model.LogProb("σας", Lang.Greek) - 1.0);
+        _model.LogProb("σας", Lang.Greek).Should().BeApproximately(_model.LogProb("σασ", Lang.Greek), 1e-9);
+    }
+
+    [Fact]
     public void Characters_outside_the_alphabet_are_heavily_penalised()
     {
         _model.LogProb("hel;lo", Lang.English).Should().BeLessThan(_model.LogProb("hello", Lang.English) - 1.0);

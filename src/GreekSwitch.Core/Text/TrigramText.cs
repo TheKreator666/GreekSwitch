@@ -16,7 +16,7 @@ public static class TrigramText
 
     public static string Normalize(string word, Lang lang)
     {
-        var text = lang == Lang.Greek ? GreekText.NormalizeForMatch(word) : word.ToLowerInvariant();
+        var text = lang == Lang.Greek ? GreekText.NormalizeForMatch(MarkMisplacedFinalSigma(word)) : word.ToLowerInvariant();
         var sb = new StringBuilder(text.Length);
         foreach (var c in text)
         {
@@ -24,6 +24,26 @@ public static class TrigramText
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>A ς before another letter isn't Greek spelling: score it as an unknown symbol, not as σ.</summary>
+    private static string MarkMisplacedFinalSigma(string word)
+    {
+        if (!GreekText.HasMisplacedFinalSigma(word))
+        {
+            return word;
+        }
+
+        var chars = word.ToCharArray();
+        for (var i = 0; i < chars.Length - 1; i++)
+        {
+            if (chars[i] == 'ς' && char.IsLetter(chars[i + 1]))
+            {
+                chars[i] = Unknown;
+            }
+        }
+
+        return new string(chars);
     }
 
     /// <summary>"^^" + normalised word + "$": one prediction per letter plus the end of word.</summary>

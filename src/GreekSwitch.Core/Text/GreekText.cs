@@ -35,6 +35,24 @@ public static class GreekText
         return new string(chars);
     }
 
+    /// <summary>
+    /// True if ς appears before another letter ("ςασ"). Written Greek only has ς at the end of a
+    /// word, so such a reading comes from English typed in the Greek layout (W is the ς key) and
+    /// is evidence against Greek; normalising it to σ would hide that.
+    /// </summary>
+    public static bool HasMisplacedFinalSigma(string text)
+    {
+        for (var i = text.IndexOf('ς', StringComparison.Ordinal); i >= 0 && i < text.Length - 1; i = text.IndexOf('ς', i + 1))
+        {
+            if (char.IsLetter(text[i + 1]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Removes tonos and dialytika (ά → α, ϊ → ι, ΰ → υ). Other characters are untouched.</summary>
     public static string StripDiacritics(string text)
     {

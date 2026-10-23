@@ -73,7 +73,7 @@ public sealed class HunspellDictionaryService : IDictionaryService
 
     private bool IsGreekWord(string word)
     {
-        if (!word.Any(GreekText.IsGreekLetter) || word.Any(c => c is >= 'A' and <= 'z'))
+        if (!word.Any(GreekText.IsGreekLetter) || word.Any(c => c is >= 'A' and <= 'z') || GreekText.HasMisplacedFinalSigma(word))
         {
             return false;
         }
