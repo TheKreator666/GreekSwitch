@@ -12,6 +12,8 @@ public static class EmbeddedData
     public const string EnglishAffixes = "GreekSwitch.dictionaries.en_US.aff";
     public const string GreekTrigrams = "GreekSwitch.ngrams.el.tri";
     public const string EnglishTrigrams = "GreekSwitch.ngrams.en.tri";
+    public const string GreekFrequencies = "GreekSwitch.frequency.el.zipf";
+    public const string EnglishFrequencies = "GreekSwitch.frequency.en.zipf";
 
     public static Stream Open(string resourceName) =>
         typeof(EmbeddedData).Assembly.GetManifestResourceStream(resourceName)

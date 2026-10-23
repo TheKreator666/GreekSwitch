@@ -7,10 +7,12 @@ namespace GreekSwitch.Core.Decisions;
 
 /// <summary>
 /// Decides whether a completed word was typed in the wrong layout. Rules, in order:
-/// 1. code-like words are kept; 2. never-convert words are kept; 3. short words are kept unless
-/// the alternative is a word, the current reading isn't, and context agrees; 4. replace if the
-/// current reading isn't a word but the alternative is, or the alternative's combined score wins
-/// by more than ReplaceThreshold; 5. otherwise keep.
+/// 1. code-like words are kept; 2. never-convert words are kept; 2b. if both readings are words
+/// (and there are 2+ keys), replace only when context favours the other language and the other
+/// reading is far more frequent; 3. short words are kept unless the alternative is a word, the
+/// current reading isn't, and context agrees; 4. replace if the current reading isn't a word but
+/// the alternative is, or the alternative's combined score wins by more than ReplaceThreshold;
+/// 5. otherwise keep.
 /// </summary>
 public sealed class DecisionEngine
 {
@@ -75,6 +77,15 @@ public sealed class DecisionEngine
         var currentScore = _scorer.Score(current, currentLayout, _context, options);
         var alternativeScore = _scorer.Score(alternative, alternativeLayout, _context, options);
         var alternativeIsBetterWord = alternativeScore.IsWord && !currentScore.IsWord;
+
+        // Both readings are words ("den"/"δεν", "toy"/"του"): the dictionary can't decide, so
+        // take the far more frequent one, but only when the surrounding words agree.
+        if (keys.Count >= 2 && currentScore.IsWord && alternativeScore.IsWord
+            && _context.Majority == alternativeLayout
+            && alternativeScore.Zipf >= currentScore.Zipf + options.FrequencyMargin)
+        {
+            return Accept(current, alternative, currentLayout, ReplaceReason.FrequencyInContext);
+        }
 
         // Rule 3: short words need the dictionary *and* the context to agree.
         if (keys.Count < options.MinLength)

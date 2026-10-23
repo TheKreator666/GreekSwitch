@@ -32,7 +32,7 @@ public static class Evaluator
             var noContext = new Tally($"{Name(lang)} typed in the {other.Code()} layout, no context", "corrected");
             var context = new Tally($"{Name(lang)} typed in the {other.Code()} layout, {Name(lang)} context", "corrected");
 
-            foreach (var (listed, zipf) in EvaluationData.Frequencies(lang, top))
+            foreach (var (listed, zipf) in EvaluationData.FrequencyList(lang, top))
             {
                 var word = AsTyped(listed, lang, caseReference);
                 if (TryType(word, lang) is not { } keys)

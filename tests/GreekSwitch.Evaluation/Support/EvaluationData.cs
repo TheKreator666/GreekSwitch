@@ -13,17 +13,20 @@ public sealed class EvaluationData : ILanguageData
         dictionaries.Preload();
         Dictionaries = dictionaries;
         Trigrams = TrigramModels.FromEmbeddedResources();
+        Frequencies = WordFrequencyTable.FromEmbeddedResources();
     }
 
     public IDictionaryService Dictionaries { get; }
 
     public ITrigramModel Trigrams { get; }
 
+    public IWordFrequency Frequencies { get; }
+
     public static string DataPath(params string[] parts) =>
         Path.Combine([AppContext.BaseDirectory, "Data", .. parts]);
 
     /// <summary>The <paramref name="top"/> most frequent words of a language: word and Zipf frequency.</summary>
-    public static IReadOnlyList<(string Word, double Zipf)> Frequencies(Lang lang, int top) =>
+    public static IReadOnlyList<(string Word, double Zipf)> FrequencyList(Lang lang, int top) =>
         File.ReadLines(DataPath("frequency", lang == Lang.Greek ? "el.tsv" : "en.tsv"))
             .Where(l => l.Length > 0 && l[0] != '#')
             .Select(l => l.Split('\t'))

@@ -1,17 +1,20 @@
 namespace GreekSwitch.Core.Scoring;
 
 /// <summary>How plausible one reading of a word is in one language.</summary>
-public readonly record struct ReadingScore(Lang Lang, bool IsWord, double LogProb, double ContextPrior, double Total);
+/// <param name="Zipf">Word frequency of the reading (0 if unknown); see <see cref="IWordFrequency"/>.</param>
+public readonly record struct ReadingScore(Lang Lang, bool IsWord, double LogProb, double ContextPrior, double Total, double Zipf = 0);
 
 public sealed class Scorer
 {
     private readonly IDictionaryService _dictionary;
     private readonly ITrigramModel _trigrams;
+    private readonly IWordFrequency _frequency;
 
-    public Scorer(IDictionaryService dictionary, ITrigramModel trigrams)
+    public Scorer(IDictionaryService dictionary, ITrigramModel trigrams, IWordFrequency? frequency = null)
     {
         _dictionary = dictionary;
         _trigrams = trigrams;
+        _frequency = frequency ?? new NoWordFrequency();
     }
 
     public ReadingScore Score(string reading, Lang lang, ContextTracker context, ScoringOptions options)
@@ -21,7 +24,8 @@ public sealed class Scorer
         var logProb = core.Length > 0 ? _trigrams.LogProb(core, lang) : double.NegativeInfinity;
         var prior = options.ContextWeight * context.Share(lang);
         var total = (isWord ? options.DictionaryWeight : 0) + (options.NgramWeight * logProb) + prior;
-        return new ReadingScore(lang, isWord, logProb, prior, total);
+        var zipf = core.Length > 0 ? _frequency.Zipf(core, lang) : 0;
+        return new ReadingScore(lang, isWord, logProb, prior, total, zipf);
     }
 
     /// <summary>

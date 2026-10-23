@@ -10,7 +10,7 @@ public static class EngineFactory
     public static DecisionEngine Create(ILanguageData data, INeverConvertList? neverConvert = null, ScoringOptions? options = null) =>
         new(
             new DualDecoder(StaticLayouts.Greek, StaticLayouts.English),
-            new Scorer(data.Dictionaries, data.Trigrams),
+            new Scorer(data.Dictionaries, data.Trigrams, data.Frequencies),
             neverConvert ?? new NeverConvertList(),
             options);
 }

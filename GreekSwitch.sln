@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GreekSwitch.TestSupport", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GreekSwitch.Evaluation", "tests\GreekSwitch.Evaluation\GreekSwitch.Evaluation.csproj", "{F28A5F1E-7EF7-4048-BE1E-098206091792}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FrequencyTableBuilder", "tools\FrequencyTableBuilder\FrequencyTableBuilder.csproj", "{E13B5367-19BB-476F-944C-93562AFD8B35}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -131,6 +133,18 @@ Global
 		{F28A5F1E-7EF7-4048-BE1E-098206091792}.Release|x64.Build.0 = Release|Any CPU
 		{F28A5F1E-7EF7-4048-BE1E-098206091792}.Release|x86.ActiveCfg = Release|Any CPU
 		{F28A5F1E-7EF7-4048-BE1E-098206091792}.Release|x86.Build.0 = Release|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Debug|x64.Build.0 = Debug|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Debug|x86.Build.0 = Debug|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Release|x64.ActiveCfg = Release|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Release|x64.Build.0 = Release|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Release|x86.ActiveCfg = Release|Any CPU
+		{E13B5367-19BB-476F-944C-93562AFD8B35}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -144,5 +158,6 @@ Global
 		{D7DD73A4-A0ED-4B87-8BC4-BC5E69CD90B6} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{699D6072-8785-4804-BFC8-D28D6C42F448} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{F28A5F1E-7EF7-4048-BE1E-098206091792} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{E13B5367-19BB-476F-944C-93562AFD8B35} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

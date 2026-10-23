@@ -11,6 +11,7 @@ public class DecisionEngineTests
 {
     private readonly FakeDictionary _dictionary = new();
     private readonly FakeTrigrams _trigrams = new();
+    private readonly FakeFrequency _frequency = new();
     private readonly NeverConvertList _neverConvert = new();
     private readonly DecisionEngine _engine;
 
@@ -18,8 +19,62 @@ public class DecisionEngineTests
     {
         _engine = new DecisionEngine(
             new DualDecoder(StaticLayouts.Greek, StaticLayouts.English),
-            new Scorer(_dictionary, _trigrams),
+            new Scorer(_dictionary, _trigrams, _frequency),
             _neverConvert);
+    }
+
+    /// <summary>"den" (Danish/lair, Zipf ~4) typed in Greek text means "δεν" (Zipf ~7).</summary>
+    private void BothAreWords(string english, double englishZipf, string greek, double greekZipf)
+    {
+        _dictionary.Add(Lang.English, english);
+        _dictionary.Add(Lang.Greek, greek);
+        _frequency.Set(Lang.English, english, englishZipf);
+        _frequency.Set(Lang.Greek, greek, greekZipf);
+    }
+
+    [Fact]
+    public void Both_words_the_far_more_frequent_one_wins_when_context_agrees()
+    {
+        BothAreWords("den", 4.0, "δεν", 7.0);
+        _engine.SeedContext(Lang.Greek);
+
+        Decide("den", Lang.English).Should().BeEquivalentTo(
+            new Replace("den", "δεν", Lang.English, Lang.Greek, ReplaceReason.FrequencyInContext));
+    }
+
+    [Fact]
+    public void Both_words_without_context_are_kept()
+    {
+        BothAreWords("den", 4.0, "δεν", 7.0);
+
+        Decide("den", Lang.English).Should().BeOfType<Keep>();
+    }
+
+    [Fact]
+    public void Both_words_with_context_for_the_current_language_are_kept()
+    {
+        BothAreWords("den", 4.0, "δεν", 7.0);
+        _engine.SeedContext(Lang.English);
+
+        Decide("den", Lang.English).Should().BeOfType<Keep>();
+    }
+
+    [Fact]
+    public void Both_words_need_a_clear_frequency_margin()
+    {
+        BothAreWords("to", 7.43, "το", 7.48);
+        _engine.SeedContext(Lang.Greek);
+
+        Decide("to", Lang.English).Should().BeOfType<Keep>();
+    }
+
+    [Fact]
+    public void Single_letters_are_never_replaced_on_frequency()
+    {
+        BothAreWords("h", 3.0, "η", 7.2);
+        _engine.SeedContext(Lang.Greek);
+
+        Decide("h", Lang.English).Should().BeOfType<Keep>();
     }
 
     private Decision Decide(string typed, Lang layout) => _engine.Decide(Typist.Type(typed, layout), layout);
@@ -140,6 +195,15 @@ public class DecisionEngineTests
         public void Add(Lang lang, string word) => _words.Add((lang, GreekText.NormalizeForMatch(word)));
 
         public bool IsWord(string word, Lang lang) => _words.Contains((lang, GreekText.NormalizeForMatch(word)));
+    }
+
+    private sealed class FakeFrequency : IWordFrequency
+    {
+        private readonly Dictionary<(Lang, string), double> _zipf = [];
+
+        public void Set(Lang lang, string word, double zipf) => _zipf[(lang, word)] = zipf;
+
+        public double Zipf(string word, Lang lang) => _zipf.GetValueOrDefault((lang, word));
     }
 
     private sealed class FakeTrigrams : ITrigramModel

@@ -8,4 +8,6 @@ public interface ILanguageData
     IDictionaryService Dictionaries { get; }
 
     ITrigramModel Trigrams { get; }
+
+    IWordFrequency Frequencies { get; }
 }

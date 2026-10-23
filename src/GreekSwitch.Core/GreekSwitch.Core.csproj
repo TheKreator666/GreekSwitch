@@ -17,6 +17,9 @@
                       LogicalName="GreekSwitch.dictionaries.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\data\ngrams\*.tri"
                       LogicalName="GreekSwitch.ngrams.%(Filename)%(Extension)" />
+    <!-- Word frequencies (wordfreq, CC BY-SA 4.0), compiled by tools/FrequencyTableBuilder. -->
+    <EmbeddedResource Include="..\..\data\frequency\*.zipf"
+                      LogicalName="GreekSwitch.frequency.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

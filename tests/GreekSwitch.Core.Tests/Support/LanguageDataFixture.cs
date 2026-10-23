@@ -12,11 +12,14 @@ public sealed class LanguageDataFixture : ILanguageData
         dictionaries.Preload();
         Dictionaries = dictionaries;
         Trigrams = TrigramModels.FromEmbeddedResources();
+        Frequencies = WordFrequencyTable.FromEmbeddedResources();
     }
 
     public IDictionaryService Dictionaries { get; }
 
     public ITrigramModel Trigrams { get; }
+
+    public IWordFrequency Frequencies { get; }
 }
 
 [CollectionDefinition(Name)]

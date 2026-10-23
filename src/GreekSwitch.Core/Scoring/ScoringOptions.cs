@@ -22,6 +22,12 @@ public sealed record ScoringOptions
     /// </summary>
     public double ReplaceThreshold { get; init; } = 2.0;
 
+    /// <summary>
+    /// When both readings are words and context favours the other language, replace if the other
+    /// reading's Zipf frequency is at least this much higher ("den" 4.0 vs "δεν" 7.0).
+    /// </summary>
+    public double FrequencyMargin { get; init; } = 1.5;
+
     /// <summary>Words with fewer keys are left alone unless the dictionary and context both say otherwise.</summary>
     public int MinLength { get; init; } = 3;
 }

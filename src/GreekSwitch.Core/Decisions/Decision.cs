@@ -28,6 +28,9 @@ public enum ReplaceReason
 
     /// <summary>A short word whose alternative is a word that context also favours.</summary>
     ShortWordInContext,
+
+    /// <summary>Both readings are words; context favours the other language and it is far more frequent.</summary>
+    FrequencyInContext,
 }
 
 /// <summary>Outcome of evaluating one completed word.</summary>

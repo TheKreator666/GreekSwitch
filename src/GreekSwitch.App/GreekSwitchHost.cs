@@ -41,17 +41,18 @@ internal sealed class GreekSwitchHost : IDisposable
     public static async Task<GreekSwitchHost> StartAsync(AppSettings settings, AppPolicy policy, NeverConvertList neverConvert, ILogger logger)
     {
         // Loading el_GR takes about a second; do it (and the layout check) off the UI thread.
-        var (dictionaries, trigrams, greek, english) = await Task.Run(() =>
+        var (dictionaries, trigrams, frequencies, greek, english) = await Task.Run(() =>
         {
             var dictionaries = HunspellDictionaryService.FromEmbeddedResources();
             dictionaries.Preload();
             return (dictionaries,
                 TrigramModels.FromEmbeddedResources(),
+                WordFrequencyTable.FromEmbeddedResources(),
                 LayoutVerifier.VerifyInstalled(StaticLayouts.Greek, logger),
                 LayoutVerifier.VerifyInstalled(StaticLayouts.English, logger));
         }).ConfigureAwait(true);
 
-        var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams), neverConvert, ToScoring(settings));
+        var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams, frequencies), neverConvert, ToScoring(settings));
         var layouts = new LayoutSwitcher(logger);
         var monitor = new InputMonitor
         {
