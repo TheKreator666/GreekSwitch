@@ -36,7 +36,8 @@ public interface IKeyboardState
 
 /// <summary>
 /// Applies a correction to the focused app: switch the layout, wait until the focused window
-/// reports it, then press the real keys that type the replacement in that layout, in one
+/// reports it, check (where UI Automation allows) that the text before the caret is still what
+/// was typed, then press the real keys that type the replacement in that layout, in one
 /// SendInput batch. Real keys rather than Unicode, because Windows 11 Notepad turns injected
 /// Unicode characters typed right after a layout switch into spaces or repeated letters,
 /// while it handles real keys fine. Unicode remains the fallback for characters no key types.
@@ -53,6 +54,7 @@ public sealed class Corrector : ICorrectionOutput
     private readonly FocusGuard _focus;
     private readonly Func<nint> _currentFocus;
     private readonly Func<nint, bool> _isCommandWindow;
+    private readonly ITextVerifier _textVerifier;
     private readonly TimeSpan _timeout;
 
     public Corrector(
@@ -66,7 +68,8 @@ public sealed class Corrector : ICorrectionOutput
         Func<int, ushort>? scanCode = null,
         TimeSpan? timeout = null,
         Func<nint>? currentFocus = null,
-        Func<nint, bool>? isCommandWindow = null)
+        Func<nint, bool>? isCommandWindow = null,
+        ITextVerifier? textVerifier = null)
     {
         _layouts = layouts;
         _maps = maps;
@@ -79,13 +82,17 @@ public sealed class Corrector : ICorrectionOutput
         _timeout = timeout ?? TimeSpan.FromMilliseconds(300);
         _currentFocus = currentFocus ?? (() => KeyboardLayouts.ForegroundLayout().FocusWindow);
         _isCommandWindow = isCommandWindow ?? Focus.CommandWindows.IsCommandWindow;
+        _textVerifier = textVerifier ?? new NoTextVerifier();
     }
 
     /// <summary>Extra wait after the focused window reports a layout switch, before typing.</summary>
     public TimeSpan SwitchSettle { get; init; }
 
-    public bool Replace(int backspaces, string text, Lang layout)
+    public bool Replace(string before, string after, Lang layout)
     {
+        var backspaces = before.Length;
+        var text = after;
+
         if (_keyboard.CommandModifierHeld)
         {
             _logger.LogInformation("Correction skipped: a modifier key is held");
@@ -129,6 +136,14 @@ public sealed class Corrector : ICorrectionOutput
         if (!_focus.StillFocused(_currentFocus()))
         {
             _logger.LogInformation("Correction skipped: focus moved to another control");
+            return false;
+        }
+
+        // Another tool (AutoCorrect, text suggestions, Grammarly) may have rewritten the word
+        // after the delimiter; blind Backspaces would then delete the wrong characters.
+        if (_textVerifier.BeforeCaret(before) == TextMatch.Mismatch)
+        {
+            _logger.LogInformation("Correction skipped: the text before the caret is not what was typed");
             return false;
         }
 

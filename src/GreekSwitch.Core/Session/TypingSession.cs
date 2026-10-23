@@ -159,7 +159,7 @@ public sealed class TypingSession
         var original = string.Join(' ', originals);
         var replacement = string.Join(' ', replacements);
 
-        if (!_output.Replace(original.Length + delimiter.Text.Length, replacement + delimiter.Text, replace.TargetLayout))
+        if (!_output.Replace(original + delimiter.Text, replacement + delimiter.Text, replace.TargetLayout))
         {
             _logger.LogInformation("Replacement not applied, lang {From}→{To}", replace.SourceLayout.Code(), replace.TargetLayout.Code());
             _run.Clear();
@@ -227,7 +227,7 @@ public sealed class TypingSession
     private void Revert(UndoRecord undo)
     {
         _run.Clear();
-        if (!_output.Replace(undo.Replacement.Length, undo.Original, undo.OriginalLayout))
+        if (!_output.Replace(undo.Replacement, undo.Original, undo.OriginalLayout))
         {
             // The user's Backspace still deleted the delimiter; carry on as an ordinary Backspace.
             _logger.LogInformation("Undo not applied");

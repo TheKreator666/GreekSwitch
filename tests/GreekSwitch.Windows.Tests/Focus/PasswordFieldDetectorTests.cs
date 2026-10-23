@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 using GreekSwitch.Windows.Focus;
+using GreekSwitch.Windows.Output;
 
 namespace GreekSwitch.Windows.Tests.Focus;
 
@@ -11,16 +12,17 @@ namespace GreekSwitch.Windows.Tests.Focus;
 public class PasswordFieldDetectorTests
 {
     [Fact]
-    public void Recognises_a_password_box_and_only_a_password_box()
+    public void Recognises_a_password_box_and_reads_text_before_the_caret()
     {
         nint password = 0, plain = 0;
         using var ready = new ManualResetEventSlim();
         Form? form = null;
+        TextBox? plainBox = null;
         var ui = new Thread(() =>
         {
             form = new BackgroundForm();
             var passwordBox = new TextBox { UseSystemPasswordChar = true };
-            var plainBox = new TextBox { Top = 40 };
+            plainBox = new TextBox { Top = 40 };
             form.Controls.Add(passwordBox);
             form.Controls.Add(plainBox);
             form.Shown += (_, _) =>
@@ -39,8 +41,20 @@ public class PasswordFieldDetectorTests
             ready.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue("the test window should open");
             var detector = new PasswordFieldDetector();
 
-            detector.IsPasswordWindow(password).Should().BeTrue();
-            detector.IsPasswordWindow(plain).Should().BeFalse();
+            detector.CheckWindow(password).IsPassword.Should().BeTrue();
+            detector.CheckWindow(plain).IsPassword.Should().BeFalse();
+            detector.CheckWindow(plain).NativeWindow.Should().Be(plain, "a native control reports its own window");
+
+            using var uia = new UiaThread();
+            var verifier = new UiaTextVerifier(uia, TimeSpan.FromSeconds(5));
+            form!.Invoke(() =>
+            {
+                plainBox!.Text = "hello world ";
+                plainBox.SelectionStart = plainBox.Text.Length;
+            });
+            verifier.BeforeCaretIn(plain, "world ").Should().Be(TextMatch.Match);
+            verifier.BeforeCaretIn(plain, "word ").Should().Be(TextMatch.Mismatch);
+            verifier.BeforeCaretIn(plain, "hello world ").Should().Be(TextMatch.Match);
         }
         finally
         {
@@ -52,7 +66,7 @@ public class PasswordFieldDetectorTests
     [Fact]
     public void Querying_the_focused_element_does_not_throw()
     {
-        new PasswordFieldDetector().Invoking(d => d.IsPasswordFieldFocused()).Should().NotThrow();
+        new PasswordFieldDetector().Invoking(d => d.CheckFocused()).Should().NotThrow();
     }
 
     private sealed class BackgroundForm : Form

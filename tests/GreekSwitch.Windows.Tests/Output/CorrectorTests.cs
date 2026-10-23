@@ -24,6 +24,8 @@ public class CorrectorTests
     private readonly FakeSender _sender;
     private nint _currentFocus = 0x100;
     private bool _commandWindow;
+    private TextMatch _textMatch = TextMatch.Unknown;
+    private string? _textChecked;
 
     public CorrectorTests()
     {
@@ -42,14 +44,39 @@ public class CorrectorTests
         vk => (ushort)(vk + 1000), // recognisable fake scan codes
         timeout ?? TimeSpan.FromMilliseconds(200),
         () => _currentFocus,
-        _ => _commandWindow);
+        _ => _commandWindow,
+        new FakeVerifier(this));
+
+    [Fact]
+    public void Types_nothing_if_the_text_before_the_caret_was_changed_by_another_tool()
+    {
+        _textMatch = TextMatch.Mismatch; // e.g. Word AutoCorrect rewrote the word after Space
+
+        Create().Replace("ηελλο ", "hello ", Lang.English).Should().BeFalse();
+
+        _sender.Batches.Should().BeEmpty();
+        _textChecked.Should().Be("ηελλο ", "it checks exactly the text it is about to delete");
+    }
+
+    [Theory]
+    [InlineData(TextMatch.Match)]
+    [InlineData(TextMatch.Unknown)] // no TextPattern: the other guards still apply
+    public void Types_when_the_text_matches_or_cannot_be_read(TextMatch match)
+    {
+        _textMatch = match;
+
+        Create().Replace("ηελλο ", "hello ", Lang.English).Should().BeTrue();
+
+        _sender.Batches.Single().Count(i => i.U.ki.wVk == VirtualKeys.Back && (i.U.ki.dwFlags & KeyUp) == 0)
+            .Should().Be(6, "one Backspace per character being replaced");
+    }
 
     [Fact]
     public void Types_nothing_if_focus_moved_to_another_control()
     {
         _currentFocus = 0x200; // e.g. a popup took focus after the word was typed
 
-        Create().Replace(12, "application ", Lang.English).Should().BeFalse();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeFalse();
 
         _sender.Batches.Should().BeEmpty();
         _layouts.SwitchRequests.Should().BeEmpty();
@@ -61,7 +88,7 @@ public class CorrectorTests
         _layouts.PollsUntilSwitch = 2;
         _layouts.OnSwitched = () => _currentFocus = 0x200;
 
-        Create().Replace(12, "application ", Lang.English).Should().BeFalse();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeFalse();
 
         _sender.Batches.Should().BeEmpty();
     }
@@ -73,7 +100,7 @@ public class CorrectorTests
     {
         _commandWindow = true;
 
-        Create().Replace(12, text, Lang.English).Should().BeFalse();
+        Create().Replace(new string('x', 12), text, Lang.English).Should().BeFalse();
 
         _sender.Batches.Should().BeEmpty();
     }
@@ -83,13 +110,13 @@ public class CorrectorTests
     {
         _commandWindow = true;
 
-        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeTrue();
     }
 
     [Fact]
     public void Enter_ended_corrections_work_outside_terminals()
     {
-        Create().Replace(12, "application\n", Lang.English).Should().BeTrue();
+        Create().Replace(new string('x', 12), "application\n", Lang.English).Should().BeTrue();
     }
 
     /// <summary>The characters a batch types, decoded the way the target layout would.</summary>
@@ -118,7 +145,7 @@ public class CorrectorTests
     {
         _layouts.PollsUntilSwitch = 3; // the target app takes a moment to apply the switch
 
-        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeTrue();
 
         _sender.LayoutAtSend.Should().Equal(Lang.English);
     }
@@ -126,7 +153,7 @@ public class CorrectorTests
     [Fact]
     public void Types_the_replacement_as_real_keys_of_the_target_layout()
     {
-        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeTrue();
 
         var batch = _sender.Batches.Single();
         batch.Should().NotContain(i => (i.U.ki.dwFlags & Unicode) != 0);
@@ -140,7 +167,7 @@ public class CorrectorTests
     {
         _layouts.Current = Lang.English;
 
-        Create().Replace(9, "πράξεις ", Lang.Greek).Should().BeTrue();
+        Create().Replace(new string('x', 9), "πράξεις ", Lang.Greek).Should().BeTrue();
 
         Typed(_sender.Batches.Single(), Lang.Greek).Should().Be("πράξεις");
     }
@@ -151,7 +178,7 @@ public class CorrectorTests
         _layouts.Current = Lang.English;
         _keyboard.CapsLockOn = true;
 
-        Create().Replace(4, "Ωρα ", Lang.Greek).Should().BeTrue();
+        Create().Replace(new string('x', 4), "Ωρα ", Lang.Greek).Should().BeTrue();
 
         // With Caps Lock on, Ω needs no Shift and ρ, α need Shift.
         var keys = _sender.Batches.Single().Select(i => i.U.ki).Where(k => k.wVk != VirtualKeys.Back).ToList();
@@ -164,7 +191,7 @@ public class CorrectorTests
     {
         _layouts.Current = Lang.English;
 
-        Create().Replace(2, "€ ", Lang.English).Should().BeTrue();
+        Create().Replace(new string('x', 2), "€ ", Lang.English).Should().BeTrue();
 
         _sender.Batches.Single().Should().Contain(i => (i.U.ki.dwFlags & Unicode) != 0 && i.U.ki.wScan == '€');
     }
@@ -174,7 +201,7 @@ public class CorrectorTests
     {
         _layouts.Current = Lang.English;
 
-        Create().Replace(4, "abc ", Lang.English).Should().BeTrue();
+        Create().Replace(new string('x', 4), "abc ", Lang.English).Should().BeTrue();
 
         _layouts.SwitchRequests.Should().BeEmpty();
     }
@@ -184,7 +211,7 @@ public class CorrectorTests
     {
         _layouts.PollsUntilSwitch = int.MaxValue;
 
-        Create(TimeSpan.FromMilliseconds(30)).Replace(12, "application ", Lang.English).Should().BeFalse();
+        Create(TimeSpan.FromMilliseconds(30)).Replace(new string('x', 12), "application ", Lang.English).Should().BeFalse();
 
         _sender.Batches.Should().BeEmpty();
     }
@@ -196,7 +223,7 @@ public class CorrectorTests
         _guard.MarkProcessed(_guard.Captured);
         _guard.OnKeyCaptured(isTypingKey: true);   // a letter typed meanwhile
 
-        Create().Replace(12, "application ", Lang.English).Should().BeFalse();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeFalse();
 
         _sender.Batches.Should().BeEmpty();
     }
@@ -208,7 +235,7 @@ public class CorrectorTests
         _guard.MarkProcessed(_guard.Captured);
         _guard.OnKeyCaptured(isTypingKey: false);  // e.g. Shift for the next word's capital
 
-        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeTrue();
     }
 
     [Fact]
@@ -216,7 +243,7 @@ public class CorrectorTests
     {
         _keyboard.CommandModifierHeld = true;
 
-        Create().Replace(12, "application ", Lang.English).Should().BeFalse();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeFalse();
 
         _sender.Batches.Should().BeEmpty();
         _layouts.SwitchRequests.Should().BeEmpty();
@@ -227,7 +254,7 @@ public class CorrectorTests
     {
         _keyboard.ShiftHeldPolls = 5;
 
-        Create().Replace(12, "application ", Lang.English).Should().BeTrue();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeTrue();
 
         Typed(_sender.Batches.Single(), Lang.English).Should().Be("application");
     }
@@ -237,7 +264,7 @@ public class CorrectorTests
     {
         _keyboard.ShiftHeldPolls = int.MaxValue;
 
-        Create(TimeSpan.FromMilliseconds(30)).Replace(12, "application ", Lang.English).Should().BeFalse();
+        Create(TimeSpan.FromMilliseconds(30)).Replace(new string('x', 12), "application ", Lang.English).Should().BeFalse();
 
         _sender.Batches.Should().BeEmpty();
     }
@@ -247,7 +274,16 @@ public class CorrectorTests
     {
         _sender.Blocked = true;
 
-        Create().Replace(12, "application ", Lang.English).Should().BeFalse();
+        Create().Replace(new string('x', 12), "application ", Lang.English).Should().BeFalse();
+    }
+
+    private sealed class FakeVerifier(CorrectorTests test) : ITextVerifier
+    {
+        public TextMatch BeforeCaret(string expected)
+        {
+            test._textChecked = expected;
+            return test._textMatch;
+        }
     }
 
     private sealed class FakeKeyboard : IKeyboardState

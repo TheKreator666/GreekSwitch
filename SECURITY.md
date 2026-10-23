@@ -12,7 +12,8 @@ page explains what it captures, what it doesn't, and why.
 | Which control had keyboard focus for each key (a window handle) | So a correction is only typed into the control the word was typed into | Memory only |
 | That a mouse button was pressed (not where) | A click may move the caret, so the word is forgotten | Nowhere; it only clears the buffer |
 | The foreground app's executable name (e.g. `notepad.exe`) | To honour the exclusion list | Memory only |
-| Whether the focused control is a password field (UI Automation) | To go passive in password fields | Memory only |
+| Whether the focused control is a password field (UI Automation, on a separate thread; capture stays off until it answers) | To go passive in password fields | Memory only |
+| Right before a correction: the characters just before the caret in the focused control, as many as the correction will delete (UI Automation TextPattern, where the control supports it) | To check that no other tool (AutoCorrect, text suggestions, Grammarly) changed the word since it was typed; if it did, the correction is skipped | Compared with the expected text, then dropped. Never stored or logged. |
 
 While GreekSwitch is disabled, paused, in an excluded app, or in a password field, the hook
 **does not enqueue key presses at all**. Password managers (KeePass, KeePassXC, 1Password,
@@ -67,6 +68,9 @@ When it corrects a word, GreekSwitch posts `WM_INPUTLANGCHANGEREQUEST` to switch
 window's layout. It then uses `SendInput` to send Backspaces and the key presses that retype
 the word. It does nothing else to other processes. Safeguards:
 
+- **Only over the text that was typed.** Where the control supports UI Automation's TextPattern,
+  the text before the caret is read and compared first; if another tool rewrote the word, nothing
+  is sent.
 - **Only into the same control.** If keyboard focus has moved since the word was typed (a popup,
   another window), the correction is cancelled. This is checked before the layout switch and
   again just before typing.

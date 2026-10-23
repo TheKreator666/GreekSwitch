@@ -56,6 +56,7 @@ internal sealed class GreekSwitchHost : IDisposable
 
         var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams, frequencies), neverConvert, ToScoring(settings));
         var layouts = new LayoutSwitcher(logger);
+        var uia = new UiaThread();
         var monitor = new InputMonitor
         {
 #if DEBUG
@@ -70,7 +71,14 @@ internal sealed class GreekSwitchHost : IDisposable
         var session = new TypingSession(
             engine,
             new KeyClassifier(greek, english),
-            new Corrector(layouts, lang => lang == Lang.Greek ? greek : english, monitor.TypeAhead, monitor.Keyboard, logger, monitor.Focus)
+            new Corrector(
+                layouts,
+                lang => lang == Lang.Greek ? greek : english,
+                monitor.TypeAhead,
+                monitor.Keyboard,
+                logger,
+                monitor.Focus,
+                textVerifier: new UiaTextVerifier(uia))
             {
                 SwitchSettle = TimeSpan.FromMilliseconds(Math.Clamp(settings.LayoutSwitchSettleMs, 0, 250)),
             },
@@ -88,7 +96,6 @@ internal sealed class GreekSwitchHost : IDisposable
             throw;
         }
 
-        var uia = new UiaThread();
         var worker = new CorrectionWorker(monitor, session, engine, layouts, new PasswordFieldDetector(), policy, uia, logger);
         logger.LogInformation("GreekSwitch started");
         return new GreekSwitchHost(monitor, uia, engine, session, worker, logger);

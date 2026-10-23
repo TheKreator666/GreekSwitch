@@ -176,10 +176,19 @@ public sealed class TypingSimulator : ICorrectionOutput
         return this;
     }
 
-    public bool Replace(int backspaces, string text, Lang layout)
+    public bool Replace(string before, string after, Lang layout)
     {
         _committed.Append(_decoder.Decode(_pending, ActiveLayout));
         _pending.Clear();
+
+        // The session must only ever replace exactly what is on screen.
+        if (!_committed.ToString().EndsWith(before, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Replace expected \"{before}\" before the caret, but the screen ends with \"{_committed}\".");
+        }
+
+        var backspaces = before.Length;
+        var text = after;
 
         LayoutSwitches.Add(layout);
         if (_followLayoutSwitches)
