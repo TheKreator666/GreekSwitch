@@ -10,9 +10,12 @@ public sealed class LanguageDataFixture
         var dictionaries = HunspellDictionaryService.FromEmbeddedResources();
         dictionaries.Preload();
         Dictionaries = dictionaries;
+        Trigrams = TrigramModels.FromEmbeddedResources();
     }
 
     public IDictionaryService Dictionaries { get; }
+
+    public ITrigramModel Trigrams { get; }
 }
 
 [CollectionDefinition(Name)]
