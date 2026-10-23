@@ -11,8 +11,8 @@ namespace GreekSwitch.Core.Decisions;
 /// (and there are 2+ keys), replace only when context favours the other language and the other
 /// reading is far more frequent; 3. short words are kept unless the alternative is a common word,
 /// the current reading isn't a word, and context agrees; 4. replace if the current reading isn't a word but
-/// the alternative is, or the alternative's combined score wins by more than ReplaceThreshold;
-/// 5. otherwise keep.
+/// the alternative is, or (only when the current reading is not a word) the alternative's combined
+/// score wins by more than ReplaceThreshold; 5. otherwise keep.
 /// </summary>
 public sealed class DecisionEngine
 {
@@ -102,7 +102,10 @@ public sealed class DecisionEngine
             return Accept(current, alternative, currentLayout, ReplaceReason.Dictionary);
         }
 
-        if (alternativeScore.Total - currentScore.Total > options.ReplaceThreshold)
+        // The margin only arbitrates between non-words: a reading that is a dictionary word is
+        // never replaced on letter statistics alone (both-words cases are handled above, by
+        // frequency and context).
+        if (!currentScore.IsWord && alternativeScore.Total - currentScore.Total > options.ReplaceThreshold)
         {
             return Accept(current, alternative, currentLayout, ReplaceReason.ScoreMargin);
         }

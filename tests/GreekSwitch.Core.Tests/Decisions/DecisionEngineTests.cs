@@ -108,6 +108,27 @@ public class DecisionEngineTests
     }
 
     [Fact]
+    public void Both_readings_words_are_never_replaced_by_the_trigram_margin()
+    {
+        _dictionary.Add(Lang.Greek, "ηελλο");
+        _dictionary.Add(Lang.English, "hello");
+        _trigrams.Set(Lang.Greek, "ηελλο", -20.0); // an absurd margin
+        _trigrams.Set(Lang.English, "hello", -1.0);
+
+        Decide("ηελλο", Lang.Greek).Should().Be(new Keep(KeepReason.Plausible));
+    }
+
+    [Fact]
+    public void A_valid_current_word_is_never_replaced_by_the_trigram_margin()
+    {
+        _dictionary.Add(Lang.Greek, "ηελλο");
+        _trigrams.Set(Lang.Greek, "ηελλο", -20.0);
+        _trigrams.Set(Lang.English, "hello", -1.0);
+
+        Decide("ηελλο", Lang.Greek).Should().Be(new Keep(KeepReason.Plausible));
+    }
+
+    [Fact]
     public void Keeps_when_the_margin_is_below_the_threshold()
     {
         _trigrams.Set(Lang.Greek, "ηελλο", -4.0);
