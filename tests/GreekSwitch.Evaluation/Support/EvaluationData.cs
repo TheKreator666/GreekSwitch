@@ -9,9 +9,7 @@ public sealed class EvaluationData : ILanguageData
 {
     public EvaluationData()
     {
-        var dictionaries = HunspellDictionaryService.FromEmbeddedResources();
-        dictionaries.Preload();
-        Dictionaries = dictionaries;
+        Dictionaries = LexiconDictionaryService.FromEmbeddedResources();
         Trigrams = TrigramModels.FromEmbeddedResources();
         Frequencies = WordFrequencyTable.FromEmbeddedResources();
     }

@@ -2,10 +2,13 @@
 
 GreekSwitch embeds or depends on the following third-party components.
 
-## Hunspell dictionaries (embedded in the executable)
+## Hunspell dictionaries (embedded in the executable as hashed word lists)
 
 Source: LibreOffice dictionaries repository, <https://github.com/LibreOffice/dictionaries>.
-The original README files ship unmodified next to the dictionaries in `data/dictionaries/`.
+The original files and README files are in `data/dictionaries/`. The executable doesn't contain
+the `.dic`/`.aff` files themselves. It contains `data/lexicon/el.lex` and `en.lex`: every word
+form, expanded with the affix rules and stored as 64-bit hashes (see `data/lexicon/README.md`).
+These are derived works of the dictionaries and carry the same terms as their source, below.
 
 ### el_GR (Greek)
 
@@ -59,7 +62,6 @@ GreekSwitch.Core and used by the decision engine.
 
 | Package | Used by | License |
 |---|---|---|
-| WeCantSpell.Hunspell | Core (shipped) | MPL 1.1 / GPL 2.0 / LGPL 2.1, inherited from Hunspell (Kevin Hendricks, Németh László et al.), of which it is a port |
 | Microsoft.Extensions.Logging.Abstractions | Core (shipped) | MIT |
 | .NET runtime (self-contained publish) | App (shipped) | MIT |
 | xunit, xunit.runner.visualstudio | tests only | Apache 2.0 |

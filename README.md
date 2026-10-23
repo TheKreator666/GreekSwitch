@@ -90,7 +90,8 @@ the word's keys are decoded in both layouts. The Greek reading follows the real 
 score = (isDictionaryWord ? dictionaryWeight : 0) + ngramWeight × trigramLogProb + contextPrior
 ```
 
-- **Dictionary:** Hunspell (LibreOffice `el_GR` and `en_US`) via WeCantSpell. Greek matching
+- **Dictionary:** every word form of the LibreOffice Hunspell dictionaries `el_GR` and `en_US`,
+  expanded with their affix rules at build time and stored as hashes (`data/lexicon`). Greek matching
   ignores accents and the σ/ς form at the end of a word, so `καλημερα`, `ΚΑΛΗΜΕΡΑ` and `πράξεισ`
   all count. Two things are *not* ignored. A `ς` before another letter (`ςασ`, which is "was"
   typed in the Greek layout) is never Greek. A lowercase reading doesn't match an entry that
@@ -188,8 +189,8 @@ text. A unit test enforces this.
 - **Apps with their own autocorrect or autocomplete** (Word, some chat apps) may also react to
   the retyped text.
 - **Enter/Tab-ended words aren't corrected** unless you turn on `correctOnEnterAndTab`.
-- **Memory and size.** The full Greek Hunspell dictionary (about 830k forms) uses roughly
-  180 MB of RAM and takes about 1 s to load at startup. The self-contained exe is about 67 MB.
+- **Memory and size.** About 90 MB of RAM in use (the dictionaries are hashed word lists of
+  ~7 MB; the rest is .NET and WinForms). The self-contained exe is about 70 MB.
 - **Dead-key edge cases.** A dead key followed by Space types a lone accent in Greek; such words
   are left as they are.
 - **Caps Lock** is tracked from key events after start-up. If it gets out of sync (rare, e.g.

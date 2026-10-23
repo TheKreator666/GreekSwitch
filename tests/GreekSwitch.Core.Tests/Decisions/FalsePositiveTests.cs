@@ -1,5 +1,4 @@
 using System.Text;
-using GreekSwitch.Core.Data;
 using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Layout;
 using GreekSwitch.Core.Scoring;
@@ -16,8 +15,8 @@ namespace GreekSwitch.Core.Tests.Decisions;
 public class FalsePositiveTests(LanguageDataFixture data, ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(Lang.Greek, EmbeddedData.GreekDictionary, "ISO-8859-7", 400)]
-    [InlineData(Lang.English, EmbeddedData.EnglishDictionary, "UTF-8", 20)]
+    [InlineData(Lang.Greek, "el_GR.dic", "ISO-8859-7", 400)]
+    [InlineData(Lang.English, "en_US.dic", "UTF-8", 20)]
     public void Correctly_typed_dictionary_words_are_rarely_replaced(Lang lang, string resource, string encoding, int every)
     {
         var words = SampleWords(resource, encoding, every, lang);
@@ -47,8 +46,8 @@ public class FalsePositiveTests(LanguageDataFixture data, ITestOutputHelper outp
     }
 
     [Theory]
-    [InlineData(Lang.Greek, EmbeddedData.GreekDictionary, "ISO-8859-7", 400)]
-    [InlineData(Lang.English, EmbeddedData.EnglishDictionary, "UTF-8", 20)]
+    [InlineData(Lang.Greek, "el_GR.dic", "ISO-8859-7", 400)]
+    [InlineData(Lang.English, "en_US.dic", "UTF-8", 20)]
     public void Dictionary_words_typed_in_the_wrong_layout_are_mostly_corrected(Lang lang, string resource, string encoding, int every)
     {
         var words = SampleWords(resource, encoding, every, lang);
@@ -85,7 +84,7 @@ public class FalsePositiveTests(LanguageDataFixture data, ITestOutputHelper outp
     private static List<string> SampleWords(string resource, string encoding, int every, Lang lang)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        using var reader = new StreamReader(EmbeddedData.Open(resource), Encoding.GetEncoding(encoding));
+        using var reader = new StreamReader(Path.Combine(AppContext.BaseDirectory, "dictionaries", resource), Encoding.GetEncoding(encoding));
         reader.ReadLine(); // entry count
         var words = new List<string>();
         var index = 0;

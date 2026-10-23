@@ -7,14 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="WeCantSpell.Hunspell" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <!-- Dictionaries and trigram models are embedded so the published exe is a true single file. -->
   <ItemGroup>
-    <EmbeddedResource Include="..\..\data\dictionaries\*.dic;..\..\data\dictionaries\*.aff"
-                      LogicalName="GreekSwitch.dictionaries.%(Filename)%(Extension)" />
+    <!-- Word forms of el_GR/en_US, affix-expanded and hashed by tools/NgramBuilder (data/lexicon/README.md). -->
+    <EmbeddedResource Include="..\..\data\lexicon\*.lex"
+                      LogicalName="GreekSwitch.lexicon.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\data\ngrams\*.tri"
                       LogicalName="GreekSwitch.ngrams.%(Filename)%(Extension)" />
     <!-- Word frequencies (wordfreq, CC BY-SA 4.0), compiled by tools/FrequencyTableBuilder. -->

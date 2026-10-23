@@ -37,7 +37,7 @@ KeyboardHook (hook thread, WH_KEYBOARD_LL) ─► Channel<InputEvent> ─► Cor
   MouseHook, FocusWatcher (WinEvents) ──────┘                          │ passive? excluded app / password field / paused
                                                                        ▼
 TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: DecisionEngine
-  DecisionEngine: DualDecoder (both readings) → Scorer (Hunspell + trigrams + ContextTracker) → rules → Keep | Replace
+  DecisionEngine: DualDecoder (both readings) → Scorer (hashed lexicon + trigrams + Zipf + ContextTracker) → rules → Keep | Replace
   Replace → Corrector (ICorrectionOutput): guards → switch layout first → KeyPlanner real keys → one SendInput batch
   UndoTracker: Backspace right after a correction reverts it and learns the word (as an HMAC hash)
 ```
@@ -213,6 +213,7 @@ Same guards apply. Add tests in `TypingSimulator`.
 - Measure the working set with el_GR loaded. If it's large, replace Hunspell lookups with a
   build-time hash set of normalised affix-expanded forms (the NgramBuilder already expands them).
   That is one probe instead of dozens of accent-variant checks per non-dictionary word.
+  **Done (12g):** 191 MB → 87 MB working set, `LexiconDictionaryService`, `data/lexicon/`.
 - Extend `docs/manual-test.md` with: Remote Desktop/Citrix (must be passive), an app run as
   administrator (correction skipped and logged), a UWP/Store app, Google Docs, Word with
   AutoCorrect on, Grammarly, Windows text suggestions, NVDA/Narrator running, and a

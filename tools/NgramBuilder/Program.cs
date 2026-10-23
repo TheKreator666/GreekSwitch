@@ -8,19 +8,24 @@ using NgramBuilder;
 // NgramBuilder: corpus → character trigram counts (format: see data/ngrams/README.md).
 //
 //   NgramBuilder --lang el --aff el_GR.aff --dic el_GR.dic [--corpus extra.txt ...] --out el.tri
+//                [--lexicon el.lex]
 //
 // --dic/--aff expand a Hunspell dictionary with its affix rules and count each form once.
 // --corpus adds plain UTF-8 text, counting every word token (the hook for a real corpus later).
+// --lexicon also writes every expanded form, hashed, as the app's dictionary (see
+//   LexiconDictionaryService and data/lexicon/README.md).
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 var options = ParseArgs(args);
 if (options is null)
 {
-    Console.Error.WriteLine("usage: NgramBuilder --lang el|en --out <file.tri> [--aff <aff> --dic <dic>] [--corpus <txt>]...");
+    Console.Error.WriteLine("usage: NgramBuilder --lang el|en --out <file.tri> [--aff <aff> --dic <dic>] [--corpus <txt>]... [--lexicon <file.lex>]");
     return 2;
 }
 
-var (lang, outPath, aff, dic, corpora) = options.Value;
+var (lang, outPath, aff, dic, corpora, lexiconPath) = options.Value;
+var lowercaseForms = new List<ulong>();
+var capitalisedForms = new List<ulong>();
 var counts = new Dictionary<string, long>(StringComparer.Ordinal);
 long words = 0, skipped = 0;
 
@@ -52,6 +57,9 @@ if (aff is not null && dic is not null)
     {
         foreach (var form in expander.Expand(line))
         {
+            var hash = LexiconDictionaryService.Hash(LexiconDictionaryService.Key(form, lang));
+            (form.Any(char.IsUpper) ? capitalisedForms : lowercaseForms).Add(hash);
+
             if (seen.Add(TrigramText.Normalize(form, lang)))
             {
                 Count(form);
@@ -88,6 +96,17 @@ using (var writer = new StreamWriter(outPath, false, new UTF8Encoding(false)) { 
 }
 
 Console.WriteLine($"{outPath}: {words} words, {counts.Count} trigrams, {skipped} skipped");
+
+if (lexiconPath is not null)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(lexiconPath))!);
+    using (var stream = File.Create(lexiconPath))
+    {
+        Lexicon.Write(stream, lowercaseForms, capitalisedForms);
+    }
+
+    Console.WriteLine($"{lexiconPath}: {lowercaseForms.Distinct().Count()} lowercase + {capitalisedForms.Distinct().Count()} capitalised forms, {new FileInfo(lexiconPath).Length / 1024} KB");
+}
 return 0;
 
 static IEnumerable<string> Tokenize(string line)
@@ -112,10 +131,10 @@ static IEnumerable<string> Tokenize(string line)
     }
 }
 
-static (Lang Lang, string Out, string? Aff, string? Dic, List<string> Corpora)? ParseArgs(string[] args)
+static (Lang Lang, string Out, string? Aff, string? Dic, List<string> Corpora, string? Lexicon)? ParseArgs(string[] args)
 {
     Lang? lang = null;
-    string? output = null, aff = null, dic = null;
+    string? output = null, aff = null, dic = null, lexicon = null;
     var corpora = new List<string>();
     for (var i = 0; i + 1 < args.Length; i += 2)
     {
@@ -126,6 +145,7 @@ static (Lang Lang, string Out, string? Aff, string? Dic, List<string> Corpora)? 
             case "--aff": aff = args[i + 1]; break;
             case "--dic": dic = args[i + 1]; break;
             case "--corpus": corpora.Add(args[i + 1]); break;
+            case "--lexicon": lexicon = args[i + 1]; break;
             default: return null;
         }
     }
@@ -136,5 +156,5 @@ static (Lang Lang, string Out, string? Aff, string? Dic, List<string> Corpora)? 
         return null;
     }
 
-    return (lang.Value, output, aff, dic, corpora);
+    return (lang.Value, output, aff, dic, corpora, lexicon);
 }

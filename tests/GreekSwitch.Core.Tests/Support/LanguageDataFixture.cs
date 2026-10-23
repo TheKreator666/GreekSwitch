@@ -8,9 +8,7 @@ public sealed class LanguageDataFixture : ILanguageData
 {
     public LanguageDataFixture()
     {
-        var dictionaries = HunspellDictionaryService.FromEmbeddedResources();
-        dictionaries.Preload();
-        Dictionaries = dictionaries;
+        Dictionaries = LexiconDictionaryService.FromEmbeddedResources();
         Trigrams = TrigramModels.FromEmbeddedResources();
         Frequencies = WordFrequencyTable.FromEmbeddedResources();
     }

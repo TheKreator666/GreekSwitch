@@ -14,6 +14,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The raw Hunspell word lists, sampled by FalsePositiveTests (the app ships them hashed). -->
+    <None Include="..\..\data\dictionaries\*.dic" Link="dictionaries\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
     <Using Include="GreekSwitch.TestSupport" />
