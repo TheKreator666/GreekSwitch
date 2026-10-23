@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>GreekSwitch</AssemblyName>
+    <RootNamespace>GreekSwitch.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GreekSwitch.Core\GreekSwitch.Core.csproj" />
+    <ProjectReference Include="..\GreekSwitch.Windows\GreekSwitch.Windows.csproj" />
+  </ItemGroup>
+
+</Project>
