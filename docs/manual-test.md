@@ -93,6 +93,41 @@ Tip: make the active layout visible in the taskbar, so you can see GreekSwitch s
       it. Off is the default.
 - [ ] **Exit**. The tray icon disappears, typing anywhere is unaffected, and the process has ended.
 
+## 10. Robustness (milestone 12)
+
+- [ ] **Remote Desktop / Citrix:** connect with `mstsc` (or Citrix Workspace) and type
+      wrong-layout words in a remote Notepad. Nothing is corrected, and the log shows
+      `Key capture off (passive): excluded app`.
+- [ ] **App run as administrator:** start Notepad with *Run as administrator* and type a
+      wrong-layout word. It is not corrected, and the log shows `SendInput delivered 0 of …`.
+      Nothing is half-typed.
+- [ ] **UWP / Store app** (e.g. Sticky Notes or the Mail app): corrections work, or are skipped
+      cleanly if the layout switch is ignored. The log then shows `trying the layout hotkey`
+      and, if that fails too, `switch … not visible in time`.
+- [ ] **Google Docs** in Chrome: corrections work. Docs draws its own text, so UI Automation
+      may not expose it; corrections then rely on the other guards.
+- [ ] **Word with AutoCorrect on:** type `teh ` in the English layout. Word fixes it to `the`
+      itself, and GreekSwitch does nothing to it. Then type a wrong-layout word that Word also
+      autocorrects. The correction is skipped with `the text before the caret is not what was
+      typed`, and no wrong characters are deleted.
+- [ ] **Grammarly** (if installed): accept a Grammarly suggestion right after a word.
+      GreekSwitch never deletes Grammarly's text.
+- [ ] **Windows text suggestions** (Settings → Time & language → Typing → Show text
+      suggestions when typing on the physical keyboard): accepting a suggestion is never
+      undone or mangled.
+- [ ] **NVDA or Narrator running:** corrections still work, and the screen reader isn't flooded
+      (it may read the corrected word).
+- [ ] **High-DPI, two monitors with different scaling:** the tray icon is sharp on both, and the
+      Settings dialog is readable on both.
+- [ ] **Password field, fail closed:** click into a password field and type immediately.
+      Nothing is corrected, even in the first moment before UI Automation answers.
+- [ ] **Lock and unlock** (Win+L): no word typed before locking is corrected after unlocking.
+- [ ] **Sleep and resume:** after resuming, corrections still work (the log shows
+      `Resumed from sleep: reinstalling hooks`).
+- [ ] **Health:** the tray tooltip normally says `GreekSwitch: on`. Only if the keyboard hook
+      stops receiving input after three reinstalls does it turn red with
+      `GreekSwitch: error, see the log`.
+
 ## 9. Privacy spot checks
 
 - [ ] After a session of typing, search the log for words you typed. None appear.
