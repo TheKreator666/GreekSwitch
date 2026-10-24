@@ -338,7 +338,9 @@ public sealed class TypingSession
             (undo.TaughtAlways ? _alwaysConvert : _neverConvert).Forget(taught); // the user took it back
         }
 
-        foreach (var word in undo.Words ?? [Scorer.LexicalCore(undo.Original)])
+        // A hotkey conversion has Words = []: undoing it only takes back what it taught.
+        IReadOnlyList<string> learned = undo.Words ?? [Scorer.LexicalCore(undo.Original)];
+        foreach (var word in learned)
         {
             _neverConvert.Learn(word);
         }
@@ -346,10 +348,10 @@ public sealed class TypingSession
         _buffer.Restore(undo.Keys, undo.OriginalLayout);
 
         _logger.LogInformation(
-            "Replacement reverted by Backspace, lang back to {Lang}, length {Length}, words {Words}; added to never-convert list",
+            "Replacement reverted by Backspace, lang back to {Lang}, length {Length}, words added to never-convert list {Learned}",
             undo.OriginalLayout.Code(),
             undo.Original.Length,
-            undo.Words?.Count ?? 1);
+            learned.Count);
     }
 
     private void SetLast(IReadOnlyList<KeyStroke> keys, Lang typed, Lang shown, string delimiter)
