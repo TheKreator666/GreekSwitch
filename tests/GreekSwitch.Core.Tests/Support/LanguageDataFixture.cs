@@ -1,9 +1,10 @@
+using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
 using GreekSwitch.TestSupport;
 
 namespace GreekSwitch.Core.Tests.Support;
 
-/// <summary>Loads the real embedded dictionaries and trigram models once for all tests that need them.</summary>
+/// <summary>Loads the real embedded dictionaries, trigram models, frequencies and phonetic index once for all tests that need them.</summary>
 public sealed class LanguageDataFixture : ILanguageData
 {
     public LanguageDataFixture()
@@ -11,6 +12,7 @@ public sealed class LanguageDataFixture : ILanguageData
         Dictionaries = LexiconDictionaryService.FromEmbeddedResources();
         Trigrams = TrigramModels.FromEmbeddedResources();
         Frequencies = WordFrequencyTable.FromEmbeddedResources();
+        Phonetic = PhoneticIndex.FromEmbeddedResources();
     }
 
     public IDictionaryService Dictionaries { get; }
@@ -18,6 +20,8 @@ public sealed class LanguageDataFixture : ILanguageData
     public ITrigramModel Trigrams { get; }
 
     public IWordFrequency Frequencies { get; }
+
+    public PhoneticIndex Phonetic { get; }
 }
 
 [CollectionDefinition(Name)]

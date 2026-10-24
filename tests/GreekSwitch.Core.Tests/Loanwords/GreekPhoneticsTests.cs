@@ -10,10 +10,13 @@ public class GreekPhoneticsTests
     [InlineData("κομπιούτερ", "k o m p i u t e r")] // medial μπ = mp, ου = u
     [InlineData("ντεπλόι", "d e p l o i")]          // initial ντ = d, όι two vowels
     [InlineData("μπαγκ", "b a g")]                  // initial μπ = b, γκ = g
+    [InlineData("φίντμπακ", "f i d b a k")]         // ντ, μπ next to a consonant = d, b
+    [InlineData("άπντεϊτ", "a p d e i t")]          // ϊ: not a digraph
+    [InlineData("ντάουνλοουντ", "d a u n l o u d")] // final ντ = d
     [InlineData("τσεκάρω", "t s e k a r o")]
     [InlineData("τζάμι", "d z a m i")]
     [InlineData("θάλασσα", "th a l a s a")]         // σσ is one s
-    [InlineData("δέντρο", "dh e n t r o")]
+    [InlineData("δέντρο", "dh e d r o")]           // ντ before a consonant = d
     [InlineData("χαρά", "h a r a")]
     [InlineData("ξύλο", "k s i l o")]
     [InlineData("ψάρι", "p s a r i")]
@@ -51,7 +54,7 @@ public class GreekPhoneticsTests
     [InlineData("γίνεται", "y i n e t e")] // γί keeps its stressed i
     [InlineData("άγγελος", "a n g e l o s")]
     [InlineData("σόφτγουερ", "s o f t u e r")] // γου + vowel is English w
-    [InlineData("γουέμπ", "u e m p")]
+    [InlineData("γουέμπ", "u e b")]
     public void Reads_gamma_by_what_follows(string word, string expected)
     {
         GreekPhonetics.Transcribe(word)!.ToString().Should().Be(expected);

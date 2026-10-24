@@ -41,11 +41,11 @@ public static class GreekPhonetics
             switch (c)
             {
                 case 'μ' when next == 'π':
-                    Emit(output, i == 0, Phoneme.B, Phoneme.M, Phoneme.P);
+                    Emit(output, BetweenVowels(letters, i), Phoneme.B, Phoneme.M, Phoneme.P);
                     i += 2;
                     break;
                 case 'ν' when next == 'τ':
-                    Emit(output, i == 0, Phoneme.D, Phoneme.N, Phoneme.T);
+                    Emit(output, BetweenVowels(letters, i), Phoneme.D, Phoneme.N, Phoneme.T);
                     i += 2;
                     break;
                 case 'γ':
@@ -149,19 +149,24 @@ public static class GreekPhonetics
         return c is 'α' or 'ο' && At(letters, i + 1) == 'ι' && !tonos[i] && !dialytika[i + 1];
     }
 
-    private static void Emit(PhoneticWordBuilder output, bool initial, Phoneme single, Phoneme first, Phoneme second)
+    private static void Emit(PhoneticWordBuilder output, bool betweenVowels, Phoneme single, Phoneme first, Phoneme second)
     {
-        // Word-initial μπ/ντ are b/d; inside a word they usually transcribe English mp/nt
-        // (κομπιούτερ, κοντέινερ). The distance treats b ≈ mp and d ≈ nt as cheap either way.
-        if (initial)
-        {
-            output.Add(single);
-        }
-        else
+        // Between vowels μπ/ντ usually transcribe English mp/nt (κομπιούτερ, κοντέινερ); at the
+        // start or end of a word or next to a consonant they are b/d (ντεπλόι, φίντμπακ, άπντεϊτ).
+        // The distance treats b ≈ mp and d ≈ nt as cheap either way.
+        if (betweenVowels)
         {
             output.Add(first, second);
         }
+        else
+        {
+            output.Add(single);
+        }
     }
+
+    /// <summary>True if the two-letter digraph at <paramref name="i"/> has a vowel letter on both sides.</summary>
+    private static bool BetweenVowels(char[] letters, int i) =>
+        i > 0 && IsVowelLetter(letters[i - 1]) && IsVowelLetter(At(letters, i + 2));
 
     private static void AddConsonant(char c, PhoneticWordBuilder output)
     {
@@ -202,6 +207,9 @@ public static class GreekPhonetics
         'ο' or 'ω' => Phoneme.O,
         _ => Phoneme.I, // η, ι, υ
     };
+
+    /// <summary>True for a lowercase Greek consonant letter (ς included).</summary>
+    public static bool IsConsonantLetter(char c) => c is >= 'α' and <= 'ω' && !IsVowelLetter(c);
 
     private static bool IsVowelLetter(char c) => c is 'α' or 'ε' or 'η' or 'ι' or 'ο' or 'υ' or 'ω';
 
