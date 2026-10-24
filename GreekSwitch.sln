@@ -29,6 +29,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FrequencyTableBuilder", "to
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GreekSwitch.App.Tests", "tests\GreekSwitch.App.Tests\GreekSwitch.App.Tests.csproj", "{D8B686A8-4E05-4832-8E64-D22E57911B90}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhoneticIndexBuilder", "tools\PhoneticIndexBuilder\PhoneticIndexBuilder.csproj", "{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -159,6 +161,18 @@ Global
 		{D8B686A8-4E05-4832-8E64-D22E57911B90}.Release|x64.Build.0 = Release|Any CPU
 		{D8B686A8-4E05-4832-8E64-D22E57911B90}.Release|x86.ActiveCfg = Release|Any CPU
 		{D8B686A8-4E05-4832-8E64-D22E57911B90}.Release|x86.Build.0 = Release|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Debug|x64.Build.0 = Debug|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Debug|x86.Build.0 = Debug|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Release|x64.ActiveCfg = Release|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Release|x64.Build.0 = Release|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Release|x86.ActiveCfg = Release|Any CPU
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -174,5 +188,6 @@ Global
 		{F28A5F1E-7EF7-4048-BE1E-098206091792} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{E13B5367-19BB-476F-944C-93562AFD8B35} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{D8B686A8-4E05-4832-8E64-D22E57911B90} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{7F7A7B2C-7193-4129-872C-2E0AB4FBDF8A} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

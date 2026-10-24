@@ -56,6 +56,8 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
 | Tray, settings, logging, composition root | `src/GreekSwitch.App/` (`GreekSwitchHost` wires everything) |
 | IT policy keys (`HKLM`/`HKCU\Software\Policies\GreekSwitch`) | `src/GreekSwitch.App/Policy/` (`ManagedPolicy`, `IPolicyRegistry`), applied by `AppPolicy` |
 | Trigram model builder | `tools/NgramBuilder/` |
+| Loanword matching (phonemes, index, matcher, tiers, pair store) | `src/GreekSwitch.Core/Loanwords/` (`LoanwordDetector` is the entry point) |
+| Phonetic index builder (CMUdict → `data/phonetic/en.idx`) | `tools/PhoneticIndexBuilder/` |
 | End-to-end smoke test (manual, takes over the keyboard; not in the solution) | `tools/EndToEndDriver/` |
 | Tests | `tests/GreekSwitch.Core.Tests` (incl. `Support/TypingSimulator`), `tests/GreekSwitch.Windows.Tests` |
 | Docs | `README.md`, `SECURITY.md`, `THIRD_PARTY_NOTICES.md`, `docs/manual-test.md`, `docs/loanword-design.md` |
@@ -115,6 +117,11 @@ sentences per language. (An earlier Python port gave 0.03% / 68% / 70% / 72% / 8
 
 Word-level rows type a name capitalised when its only dictionary entry is capitalised (from 10b
 on; the lowercase frequency lists otherwise overstate false positives).
+
+Loanword detector (milestone 15, Core only, not wired yet), default options: a suggestion on
+0.15% of words of the frequency-weighted Greek list (all ~43k words) and 0.22% of the words of the
+Greek sentences; with tier 2 on, 0.00% (weighted) replaced. 92.9% of the 70 hand-written
+transliterations in `Data/loanwords.tsv` get the right suggestion. Both nuisance rates are gated.
 
 What's missed is the most frequent words, because their other reading is also "a word":
 `to`(το) `na`(να) `toy`(του) `me`(με) `den`(δεν) `ton`(τον) `soy`(σου) `saw`(σας) `mia`(μια),
@@ -270,7 +277,11 @@ Build it as designed in **`docs/loanword-design.md`**:
 - privacy-preserving storage of learned pairs;
 - a 5 ms median-lookup test.
 
-Follow that doc's build order.
+Follow that doc's build order. **Status:** Core built (steps 1–4 and 6: phonemes, index,
+matcher, tiers, hashed pair store, promotion, evaluation rows). Remaining: step 5 (popup, caret,
+Tab exception in the hook), calling `LoanwordDetector.Check` from `TypingSession` after a Keep,
+loading the index in the App, saving the pair store in settings.json, the Settings UI for pairs,
+and the SECURITY.md update for what gets stored.
 
 ### 16. Later (design note first, then build)
 - **Hold-and-release input.** Let the hook swallow the delimiter (and keys typed while a decision

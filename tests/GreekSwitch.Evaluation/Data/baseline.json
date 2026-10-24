@@ -3,5 +3,8 @@
   "English typed correctly, English context": 2.1E-05,
   "Latin tokens inside Greek prose (EN layout, Greek context)": 0,
   "Sentences (Greek): words typed correctly": 0.000444,
-  "Sentences (English): words typed correctly": 0.004269
+  "Sentences (English): words typed correctly": 0.004269,
+  "Loanwords: Greek frequency list, per word": 0.001483,
+  "Loanwords, tier 2 on: Greek frequency list, per word": 3.4E-05,
+  "Loanwords: Greek sentences, per Greek word": 0.002203
 }

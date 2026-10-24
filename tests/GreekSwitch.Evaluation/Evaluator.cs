@@ -132,7 +132,7 @@ public static class Evaluator
     /// entry is capitalised ("syria" → Syria, "τραμπ" stays: not in the dictionary at all) is
     /// typed capitalised, as in running text.
     /// </summary>
-    private static string AsTyped(string word, Lang lang, ILanguageData data)
+    internal static string AsTyped(string word, Lang lang, ILanguageData data)
     {
         if (word.Length == 0 || data.Dictionaries.IsWord(word, lang))
         {

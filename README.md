@@ -370,11 +370,15 @@ differ (each difference is logged).
 - Latin-script words Greeks type on purpose (`email`, `pdf`, `Teams`, `tv`…) inside Greek text;
 - 400 real sentences per language, typed as if the user forgot to switch layout from a random
   word on, with the app's layout switches applied to the following words;
+- the loanword detector (milestone 15): how often it would show a suggestion on ordinary Greek
+  (the whole frequency-weighted Greek list, and the Greek sentences: the nuisance rate, gated
+  like the false positives), how often tier 2 would replace ordinary Greek, and how many of the
+  English words written in Greek letters in `Data/loanwords.tsv` get the right suggestion;
 - `Data/regression.tsv`: hand-written mixed sentences (names, acronyms, punctuation, elision,
   capitals, a layout switched mid-word). Known failures are tagged `xfail`.
 
 It prints the full table (also written to `evaluation-report.md` next to the test binaries and
-to the CI job summary), and fails if any "wrongly changed" rate rises above
+to the CI job summary), and fails if any "wrongly changed" or loanword "suggested" rate rises above
 `Data/baseline.json`. After an intended improvement, regenerate the baseline with
 `GREEKSWITCH_UPDATE_BASELINE=1 dotnet test tests/GreekSwitch.Evaluation`, and commit it along
 with the before/after numbers.

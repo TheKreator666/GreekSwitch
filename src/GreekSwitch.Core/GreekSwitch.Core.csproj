@@ -20,6 +20,9 @@
     <!-- Word frequencies (wordfreq, CC BY-SA 4.0), compiled by tools/FrequencyTableBuilder. -->
     <EmbeddedResource Include="..\..\data\frequency\*.zipf"
                       LogicalName="GreekSwitch.frequency.%(Filename)%(Extension)" />
+    <!-- English pronunciations (CMUdict, BSD-style) indexed for loanword matching by tools/PhoneticIndexBuilder. -->
+    <EmbeddedResource Include="..\..\data\phonetic\*.idx"
+                      LogicalName="GreekSwitch.phonetic.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

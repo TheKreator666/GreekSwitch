@@ -3,3 +3,4 @@
 *.dic binary
 *.aff binary
 *.tri text eol=lf
+*.idx binary
