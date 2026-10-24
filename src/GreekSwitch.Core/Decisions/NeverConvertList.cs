@@ -13,6 +13,7 @@ public sealed class NeverConvertList : INeverConvertList
     private readonly Dictionary<string, string> _words = new(StringComparer.Ordinal);
     private readonly HashSet<string> _learned = new(StringComparer.Ordinal);
     private readonly IWordHasher _hasher;
+    private volatile bool _learningEnabled = true;
 
     public NeverConvertList(IEnumerable<string>? words = null, IEnumerable<string>? learned = null, IWordHasher? hasher = null)
     {
@@ -27,6 +28,16 @@ public sealed class NeverConvertList : INeverConvertList
 
     /// <summary>Raised after a word is added or learned; handlers run on that thread.</summary>
     public event EventHandler? Changed;
+
+    /// <summary>
+    /// False: <see cref="Learn"/> does nothing (the IT policy DisableUndoLearning). Words already
+    /// learned still match, and <see cref="Forget"/> still removes them. Set from any thread.
+    /// </summary>
+    public bool LearningEnabled
+    {
+        get => _learningEnabled;
+        set => _learningEnabled = value;
+    }
 
     public int LearnedCount
     {
@@ -71,7 +82,7 @@ public sealed class NeverConvertList : INeverConvertList
     public void Learn(string word)
     {
         var key = Key(word);
-        if (key.Length == 0)
+        if (key.Length == 0 || !_learningEnabled)
         {
             return;
         }

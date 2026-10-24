@@ -41,6 +41,18 @@ public class UndoTests(LanguageDataFixture data)
     }
 
     [Fact]
+    public void With_learning_disabled_undo_still_reverts_but_learns_nothing()
+    {
+        var sim = new TypingSimulator(data);
+        sim.NeverConvert.LearningEnabled = false; // IT policy DisableUndoLearning
+        sim.TypeIn(Lang.Greek, "αππλιψατιον ").Backspace();
+
+        sim.Screen.Should().Be("αππλιψατιον");
+        sim.NeverConvert.LearnedCount.Should().Be(0);
+        sim.NeverConvert.Contains("αππλιψατιον").Should().BeFalse();
+    }
+
+    [Fact]
     public void Undo_is_disarmed_by_a_reset()
     {
         var sim = new TypingSimulator(data).TypeIn(Lang.Greek, "αππλιψατιον ");

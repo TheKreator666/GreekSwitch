@@ -68,4 +68,34 @@ public class NeverConvertListTests
         list.LearnedCount.Should().Be(0);
         list.Contains("typed").Should().BeTrue();
     }
+
+    [Fact]
+    public void With_learning_disabled_nothing_new_is_learned_but_existing_hashes_still_match()
+    {
+        var first = new NeverConvertList(hasher: new HmacWordHasher(Key));
+        first.Learn("kalimera");
+        var list = new NeverConvertList(learned: first.LearnedSnapshot(), hasher: new HmacWordHasher(Key)) { LearningEnabled = false };
+        var changes = 0;
+        list.Changed += (_, _) => changes++;
+
+        list.Learn("kalinixta");
+
+        list.Contains("kalinixta").Should().BeFalse();
+        list.Contains("kalimera").Should().BeTrue();
+        list.LearnedCount.Should().Be(1);
+        changes.Should().Be(0, "nothing changed, so nothing is saved");
+
+        list.Forget("kalimera");
+        list.Contains("kalimera").Should().BeFalse("forgetting still works");
+    }
+
+    [Fact]
+    public void Learning_disabled_still_allows_words_typed_into_settings()
+    {
+        var list = new NeverConvertList(hasher: new HmacWordHasher(Key)) { LearningEnabled = false };
+
+        list.Add("typed");
+
+        list.Contains("typed").Should().BeTrue();
+    }
 }

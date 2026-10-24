@@ -99,6 +99,16 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Loanword_suggestions_default_on_for_files_written_before_the_setting_existed()
+    {
+        Directory.CreateDirectory(_dir);
+        var store = new SettingsStore(_dir, NullLogger.Instance);
+        File.WriteAllText(store.FilePath, $"{{ \"settingsVersion\": {AppSettings.CurrentVersion} }}");
+
+        store.Load().SuggestLoanwords.Should().BeTrue();
+    }
+
+    [Fact]
     public void Hotkey_defaults_parse()
     {
         var settings = new AppSettings();

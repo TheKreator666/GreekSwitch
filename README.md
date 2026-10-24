@@ -24,7 +24,8 @@ so every word has a Greek reading and an English reading of the same keystrokes:
    (Settings → Time & language → Language & region). GreekSwitch only switches between layouts
    you already have.
 2. Run `GreekSwitch.exe`. It's a single self-contained file, so the target machine needs no
-   .NET install (Windows 10/11 x64). An "αb" icon appears in the tray. It turns blue after
+   .NET install. There is one exe for Windows 10/11 x64 (`win-x64`) and one for ARM64 laptops
+   (`win-arm64`). An "αb" icon appears in the tray. It turns blue after
    about a second, once the dictionaries have loaded.
 3. Type. Right-click the tray icon for the menu:
    - **Enabled ✓**: master on/off switch (saved).
@@ -99,10 +100,13 @@ hand while GreekSwitch is closed:
 | `convertLastWordHotkey` / `convertSelectionHotkey` / `toggleHotkey` | `Ctrl+Alt+Space` / `Ctrl+Alt+Shift+Space` / `Ctrl+Alt+Shift+G` | The hotkeys (see *Hotkeys*). Empty turns one off. |
 | `flashOnCorrection` | `true` | Flash the tray icon green for a moment after a correction. |
 | `fixAccidentalCapsLock` | `false` | A word typed with Caps Lock on by accident (`hELLO`) becomes `Hello`, and Caps Lock is turned off. |
+| `suggestLoanwords` | `true` | Suggest the English spelling of loanwords typed in Greek (`κοντέινερ` → `container`). Reserved for the loanword feature; the policy `DisableLoanwordSuggestions` forces it off. |
 | `firstRunCompleted` | `false` | The first-run dialog has been shown. Existing installs are set to `true` on upgrade. |
 | `debugLogText` | `false` | **Debug builds only**: log the words themselves. Compiled out of Release builds. |
 
-Start with Windows lives in the registry, not in this file.
+Start with Windows lives in the registry, not in this file. An organization can fix some of
+these values with policy keys (see *For IT*); Settings then shows them disabled and marked
+*Set by your organization*, and settings.json keeps your own choice for when the policy is removed.
 
 ## How it decides
 
@@ -220,6 +224,98 @@ text. A unit test enforces this.
 - **Caps Lock** is tracked from key events after start-up. If it gets out of sync (rare, e.g.
   toggled from an on-screen keyboard), toggle it once.
 
+## For IT
+
+**What to deploy.** One self-contained exe per architecture, nothing to install, no admin
+rights needed (it runs `asInvoker` and never asks for elevation):
+
+| Build | Machines |
+|---|---|
+| `publish/win-x64/GreekSwitch.exe` | Windows 10/11 on Intel/AMD |
+| `publish/win-arm64/GreekSwitch.exe` | Windows 11 on ARM (Snapdragon etc.). The x64 exe also runs there under emulation, but the native one is faster and lighter. |
+
+Each comes with a `GreekSwitch.exe.sha256`. There is **no MSI or MSIX package**: the single exe is
+the deliverable. Software-distribution tools (Intune, SCCM/MECM, PDQ, a logon script) can copy it
+to e.g. `%LOCALAPPDATA%\Programs\GreekSwitch\` or a read-only share and, if wanted, add it to
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. It writes only to `%APPDATA%\GreekSwitch`,
+`%LOCALAPPDATA%\GreekSwitch` and two HKCU values (see [SECURITY.md](SECURITY.md#what-it-writes-to-disk)).
+
+**Requirements.** Each user needs both a **Greek** and an **English** keyboard layout installed
+(GreekSwitch only switches between layouts that exist; the first-run dialog says if one is
+missing). No .NET install, no network access, no open ports, pipes or services.
+
+**Verifying the exe.** The exes are **not code-signed yet** (the build has placeholder steps for
+both). Compare the hash with the published `.sha256` before allow-listing or deploying:
+
+```powershell
+Get-FileHash .\GreekSwitch.exe -Algorithm SHA256   # must equal the hash in GreekSwitch.exe.sha256
+```
+
+**Why antivirus or EDR may flag it.** GreekSwitch installs a global low-level keyboard hook
+(`SetWindowsHookEx(WH_KEYBOARD_LL)`) and types corrections with `SendInput`. Keyloggers and macro
+tools use the same two APIs, so heuristic scanners may flag it, and unsigned binaries get less
+benefit of the doubt. [SECURITY.md](SECURITY.md) documents exactly what is captured (keys of the
+current word, in memory only), and that nothing is logged as text or sent anywhere. Allow-list it
+by hash (or by path) in your AV/EDR.
+
+**AppLocker / WDAC.** Until the exe is signed, allow it with a **file hash rule** (re-created for
+each release; take the hash from the `.sha256` file or from `Get-AppLockerFileInformation`) or a
+**path rule** for a folder standard users can't write to (e.g. under `%ProgramFiles%` or a
+read-only share; a path rule on a user-writable folder lets any exe placed there run). Once
+releases are signed, a **publisher rule** covers every future version. GreekSwitch loads no
+plug-ins and extracts nothing to disk at run time, so no extra DLL rules are needed.
+
+**Apps run as administrator.** Windows (UIPI) doesn't let a standard-user process send input to an
+elevated window. GreekSwitch skips corrections there and logs it; everything else keeps working.
+
+**Remote Desktop, Citrix and VM consoles** are excluded by default: keys sent to them are decoded
+with the local layout while the remote side has its own. Run GreekSwitch inside the remote
+session instead.
+
+### Policy keys
+
+Optional values under **`HKLM\Software\Policies\GreekSwitch`** (machine) and
+**`HKCU\Software\Policies\GreekSwitch`** (user). For each value, HKLM wins over HKCU, and both win
+over the user's settings. Policies are read at start-up and whenever Settings is opened; Settings
+shows each one disabled and marked *Set by your organization*. The user's own settings.json values
+are kept underneath and come back if the policy is removed.
+
+| Value | Type | Effect |
+|---|---|---|
+| `Enabled` | `REG_DWORD` | `1` = always on, `0` = always off. The tray menu's *Enabled*, the toggle hotkey and Settings can't change it (the attempt is logged). *Pause for 5 min* still works while it is on. |
+| `ExcludedProcesses` | `REG_MULTI_SZ` | Replaces the user's list of excluded apps (one `.exe` name per line, case-insensitive). An empty value means "no excluded apps". |
+| `AdditionalAlwaysExcluded` | `REG_MULTI_SZ` | Added to the built-in, always-excluded password managers. Values from HKLM and HKCU are combined. Nothing can switch GreekSwitch on in these apps. |
+| `DisableUndoLearning` | `REG_DWORD` | `1` = no new words are learned from undo or from the *Convert last word* hotkey (corrections are still undone and converted). Hashes learned before the policy still apply; *Forget learned words* in Settings still deletes them. |
+| `DisableLoanwordSuggestions` | `REG_DWORD` | `1` = loanword suggestions (`κοντέινερ` → `container`, a coming feature) are off. |
+
+A value of the wrong type is ignored (a `REG_SZ` `"0"`/`"1"`, or a `;`-separated `REG_SZ` list,
+is accepted too). Example `.reg`:
+
+```reg
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\Software\Policies\GreekSwitch]
+"Enabled"=dword:00000001
+"DisableUndoLearning"=dword:00000001
+"DisableLoanwordSuggestions"=dword:00000001
+; REG_MULTI_SZ as hex(7): UTF-16LE strings, each ending in 00,00, the list ending in 00,00.
+; This is "CorpVault.exe" followed by "PayrollClient.exe".
+"AdditionalAlwaysExcluded"=hex(7):43,00,6f,00,72,00,70,00,56,00,61,00,75,00,6c,00,74,00,2e,00,\
+  65,00,78,00,65,00,00,00,50,00,61,00,79,00,72,00,6f,00,6c,00,6c,00,43,00,6c,00,69,00,65,00,\
+  6e,00,74,00,2e,00,65,00,78,00,65,00,00,00,00,00
+```
+
+Or with PowerShell (as administrator for HKLM):
+
+```powershell
+$key = "HKLM:\Software\Policies\GreekSwitch"
+New-Item $key -Force | Out-Null
+New-ItemProperty $key -Name Enabled -PropertyType DWord -Value 1 -Force
+New-ItemProperty $key -Name ExcludedProcesses -PropertyType MultiString -Value "cmd.exe","pwsh.exe","mstsc.exe" -Force
+```
+
+There is no ADMX template yet; Group Policy Preferences (Registry items) can set these values.
+
 ## Building from source
 
 Requires the .NET 8 SDK (or newer). Tests and the core library build on any OS, and the Windows
@@ -231,13 +327,17 @@ dotnet build -c Release
 dotnet test -c Release
 dotnet publish src/GreekSwitch.App -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
-  -p:EnableCompressionInSingleFile=true -o publish
+  -p:EnableCompressionInSingleFile=true -o publish/win-x64
+# and the same with -r win-arm64 -o publish/win-arm64
 ```
 
-Or run `./build.ps1` (Windows) or `./build.sh` (any OS). Both run all of the above and stop on
-the first failing test. `-SkipPublish` / `--skip-publish` stop after the tests. GitHub Actions
-(`.github/workflows/build.yml`, `windows-latest`) does the same and uploads `GreekSwitch.exe`
-as an artifact. It also has a placeholder step for code signing.
+Or run `./build.ps1` (Windows) or `./build.sh` (any OS). Both run all of the above for both
+architectures, write `GreekSwitch.exe.sha256` next to each exe
+(`publish/win-x64/`, `publish/win-arm64/`), and stop on the first failing test.
+`-SkipPublish` / `--skip-publish` stop after the tests. GitHub Actions
+(`.github/workflows/build.yml`, `windows-latest`) does the same and uploads the two exes as the
+artifacts `GreekSwitch-win-x64` and `GreekSwitch-win-arm64`. It also has a placeholder step for
+code signing both.
 
 **Data files are embedded.** The Hunspell dictionaries (`data/dictionaries`) and the trigram
 models (`data/ngrams`) are compiled into `GreekSwitch.Core.dll` as resources, so the published
@@ -251,7 +351,7 @@ dictionaries themselves (affix-expanded) and committed. See
 ```
 src/GreekSwitch.Core/      pure logic (net8.0): layouts, decoder, scoring, decision rules, session
 src/GreekSwitch.Windows/   hooks, SendInput, layout switching, UIA password detection, worker
-src/GreekSwitch.App/       tray app, settings, logging, composition root
+src/GreekSwitch.App/       tray app, settings, IT policy keys, logging, composition root
 tests/                     xUnit + FluentAssertions (Core: 200 tests, Windows: pure helpers)
 tools/NgramBuilder/        dictionary/corpus → trigram model
 docs/manual-test.md        manual test checklist

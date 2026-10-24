@@ -20,7 +20,20 @@ page explains what it captures, what it doesn't, and why.
 While GreekSwitch is disabled, paused, in an excluded app, or in a password field, the hook
 **does not enqueue key presses at all**. Password managers (KeePass, KeePassXC, 1Password,
 Bitwarden, Dashlane, NordPass, Enpass, RoboForm, LastPass, Proton Pass) are **always**
-excluded. That list is built in, so editing `settings.json` can't remove them.
+excluded. That list is built in, so editing `settings.json` can't remove them. An
+organization can add more apps to it with the `AdditionalAlwaysExcluded` policy value (below).
+
+## What it reads from the registry
+
+| Location | Why |
+|---|---|
+| `HKLM\Software\Policies\GreekSwitch` and `HKCU\Software\Policies\GreekSwitch` (`Enabled`, `ExcludedProcesses`, `AdditionalAlwaysExcluded`, `DisableUndoLearning`, `DisableLoanwordSuggestions`) | IT-managed settings (see the README, *For IT*). Read-only, on the UI thread, at start-up and when Settings opens; never in the hook. Policy values override settings.json in memory and are never written to it. The log records which values are set (flags and counts, not app names). |
+| `HKCU\Keyboard Layout\Toggle` | The user's own layout-switch hotkey, as a fallback when an app ignores a switch request |
+| `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\GreekSwitch` | Whether "Start with Windows" is on |
+
+`DisableUndoLearning` stops new hashes from being added (from undo and from the *Convert last
+word* hotkey). Hashes learned before the policy was set still apply until the user chooses
+*Forget learned words*. Both `Software\Policies` keys are writable only by administrators.
 
 ## What it doesn't do
 
@@ -113,9 +126,9 @@ Content that can't be read back (some delay-rendered or private formats) can't b
 
 ## Verifying the exe
 
-The release exe is **unsigned** (signing needs a code-signing certificate; the build has a
-placeholder step for it). Instead, every build writes `GreekSwitch.exe.sha256` next to the exe.
-To check a copy on another machine:
+The release exes are **unsigned** (signing needs a code-signing certificate; the build has a
+placeholder step for it). Instead, every build writes `GreekSwitch.exe.sha256` next to each exe
+(`publish/win-x64/` and `publish/win-arm64/`). To check a copy on another machine:
 
 ```powershell
 Get-FileHash .\GreekSwitch.exe -Algorithm SHA256   # must match GreekSwitch.exe.sha256

@@ -1,3 +1,4 @@
+using GreekSwitch.App.Policy;
 using GreekSwitch.App.Settings;
 using GreekSwitch.Core;
 using GreekSwitch.Core.Decisions;
@@ -17,6 +18,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly SettingsStore _store;
     private readonly ILogger _logger;
     private readonly AppPolicy _policy = new();
+    private readonly IPolicyRegistry _registry;
     private readonly NeverConvertList _neverConvert;
     private readonly NeverConvertList _alwaysConvert;
     private readonly SynchronizationContext _ui;
@@ -33,16 +35,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private HotkeyWindow? _hotkeys;
     private SelectionConverter? _selection;
     private AppSettings _settings;
+    private ManagedPolicy _managed = ManagedPolicy.None;
     private GreekSwitchHost? _host;
     private SettingsForm? _settingsForm;
 
-    public TrayApplicationContext(SettingsStore store, ILogger logger)
+    public TrayApplicationContext(SettingsStore store, ILogger logger, IPolicyRegistry? registry = null)
     {
         _store = store;
         _logger = logger;
+        _registry = registry ?? new RegistryPolicy(logger);
         _ui = SynchronizationContext.Current ?? throw new InvalidOperationException("Create on the UI thread.");
         _settings = store.Load();
-        _policy.Apply(_settings);
         var (key, keyCreated) = LearnedWordKey.LoadOrCreate(_settings, logger);
         var hasher = new HmacWordHasher(key);
         _neverConvert = new NeverConvertList(_settings.NeverConvert, _settings.NeverConvertLearned, hasher);
@@ -53,10 +56,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
             store.Save(_settings);
         }
 
+        RefreshPolicy(); // before the hooks start, so GreekSwitch disabled by policy never captures
         _neverConvert.Changed += (_, _) => _ui.Post(_ => SaveLearned(), null);
         _alwaysConvert.Changed += (_, _) => _ui.Post(_ => SaveLearned(), null);
 
-        _enabledItem = new ToolStripMenuItem("&Enabled", null, (_, _) => ToggleEnabled()) { Checked = _settings.Enabled };
+        _enabledItem = new ToolStripMenuItem("&Enabled", null, (_, _) => ToggleEnabled()) { Checked = _managed.EffectiveEnabled(_settings) };
         _pauseItem = new ToolStripMenuItem("&Pause for 5 min", null, (_, _) => TogglePause());
         var menu = new ContextMenuStrip();
         menu.Items.Add(_enabledItem);
@@ -227,8 +231,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void ToggleEnabled()
     {
+        if (_managed.Enabled is not null)
+        {
+            _logger.LogInformation("Enabled not changed: it is set by policy");
+            return;
+        }
+
         _settings.Enabled = !_settings.Enabled;
-        _policy.Apply(_settings);
+        _policy.Apply(_settings, _managed);
         _store.Save(_settings);
         _host?.NotifyPolicyChanged();
         UpdateUi();
@@ -261,9 +271,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        RefreshPolicy();
+        UpdateUi();
         SyncLearned();
         var learned = _settings.NeverConvertLearned.Count + _settings.AlwaysConvertLearned.Count;
-        using var form = _settingsForm = new SettingsForm(_settings, StartupRegistration.IsEnabled(), learned, _hotkeys?.Unavailable ?? []);
+        using var form = _settingsForm = new SettingsForm(_settings, _managed, StartupRegistration.IsEnabled(), learned, _hotkeys?.Unavailable ?? []);
         if (form.ShowDialog() != DialogResult.OK)
         {
             return;
@@ -279,7 +291,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _settings.AlwaysConvertLearned = [];
         }
 
-        _policy.Apply(_settings);
+        _policy.Apply(_settings, _managed);
         _store.Save(_settings);
         if (form.StartWithWindows != StartupRegistration.IsEnabled())
         {
@@ -289,6 +301,25 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _host?.Apply(_settings);
         _hotkeys?.Register(_settings);
         UpdateUi();
+    }
+
+    /// <summary>
+    /// Reads the policy keys (at start and when Settings opens; on the UI thread, never in the
+    /// hook) and applies them on top of the user's settings.
+    /// </summary>
+    private void RefreshPolicy()
+    {
+        var managed = ManagedPolicy.Read(_registry);
+        if (managed != _managed)
+        {
+            managed.Log(_logger);
+        }
+
+        _managed = managed;
+        _policy.Apply(_settings, _managed);
+        _neverConvert.LearningEnabled = !_managed.DisableUndoLearning;
+        _alwaysConvert.LearningEnabled = !_managed.DisableUndoLearning;
+        _host?.NotifyPolicyChanged();
     }
 
     private void SaveLearned()
@@ -306,8 +337,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void UpdateUi()
     {
-        _enabledItem.Checked = _settings.Enabled;
-        _pauseItem.Enabled = _settings.Enabled;
+        var enabled = _managed.EffectiveEnabled(_settings);
+        _enabledItem.Checked = enabled;
+        _enabledItem.Enabled = _managed.Enabled is null;
+        _enabledItem.Text = _managed.Enabled is null ? "&Enabled" : "&Enabled (set by your organization)";
+        _pauseItem.Enabled = enabled;
         var remaining = _policy.PausedUntilUtc - DateTime.UtcNow;
         _pauseItem.Text = _policy.IsPaused ? $"&Resume (paused, {remaining:m\\:ss} left)" : "&Pause for 5 min";
         var failed = _host?.Health == HostHealth.Failed;
@@ -315,7 +349,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _tray.Text = _host is null ? "GreekSwitch: loading…"
             : failed ? "GreekSwitch: error, see the log"
             : _host.Health == HostHealth.Recovering ? "GreekSwitch: recovering…"
-            : !_settings.Enabled ? "GreekSwitch: disabled"
+            : !enabled ? (_managed.Enabled is null ? "GreekSwitch: disabled" : "GreekSwitch: disabled by your organization")
             : _policy.IsPaused ? "GreekSwitch: paused"
             : "GreekSwitch: on";
     }
