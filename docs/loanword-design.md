@@ -1,8 +1,8 @@
 # Loanword matching: design
 
-**Status:** design only, not built. This is milestone 15 in `CLAUDE.md`. Build it after the
-decision-quality and robustness milestones, because it adds a popup and a second kind of
-correction on top of the same pipeline.
+**Status:** Core built (build-order steps 1–4 and 6); popup, hook exception and wiring pending
+(step 5, and calling the detector from `TypingSession`). This is milestone 15 in `CLAUDE.md`.
+See *As built (Core)* at the end for the API and the measured numbers.
 
 ## The problem
 
@@ -209,3 +209,46 @@ Greek list and report how often it *suggests* on ordinary Greek words. That is t
 5. Popup, caret positioning and the Tab exception in the hook. This is the fiddliest Win32 part;
    everything before it can be tested without a UI.
 6. Tier 2 (off by default) and promotion.
+
+## As built (Core)
+
+Code: `src/GreekSwitch.Core/Loanwords/`. Data: `data/phonetic/en.idx` (`tools/PhoneticIndexBuilder`,
+see `data/phonetic/README.md`).
+
+**Deviations from the design above**, found while tuning:
+
+- ARPAbet `Y` is the semivowel y (cheap to swap with i), not i, and stress positions are counted
+  from the *last* vowel, so `κομπιούτερ`/`computer` line up. `NG` is `n` before K/G (`λινκ`).
+- `μπ`/`ντ` are mp/nt only between vowels; at a word edge or next to a consonant they are b/d
+  (`ντεπλόι`, `φίντμπακ`, `άπντεϊτ`, `ντάουνλοουντ`). `γου` + vowel and `γι` + vowel are w and y.
+- γ vs g is a full consonant edit (transliterations write g as γκ), so `γάτα` isn't `gotta`.
+- The skeleton ignores voicing (b/p, d/t, g/k/γ, v/f, δ/θ, z/s) so `κομπιούτερ` finds `computer`.
+- Matching alone suggests far too often (`σπίτι` sounds like `spotty`, `πράξεις` like `proxies`).
+  The detector therefore skips: Greek words with Zipf ≥ 4.2 (established Greek, including adopted
+  loanwords like `τεστ`); dictionary words that end like Greek words (vowel, ς, ν); names
+  (capitalised-only dictionary entries); targets with Zipf > 5.5 (function words: `μένει`→many);
+  and, when the Greek word has a frequency, targets less than 0.5 Zipf more frequent in English.
+- Tier 1 is checked only once the index is loaded (the detector returns None until then).
+- A rejection (undo, or an explicit dismissal) resets the accept count, demoting a promoted pair;
+  3 rejections of the same pair hide that suggestion.
+
+**API** (all thread-safe):
+
+```csharp
+var pairs = new LoanwordPairStore(settings.Pairs, settings.LearnedPairs, hasher);  // hasher: the DPAPI-keyed HmacWordHasher
+var detector = new LoanwordDetector(pairs, dictionaries, frequencies, new DomainVocabulary(), new LoanwordOptions(), logger);
+_ = Task.Run(() => detector.UseIndex(PhoneticIndex.FromEmbeddedResources()));     // ~15 ms, 2.4 MB
+LoanwordResult r = detector.Check(greekWord);   // LoanwordNone | LoanwordReplace(Target, Tier) | LoanwordSuggest(Target, Score)
+detector.Accept(greekWord, target);             // Tab on a suggestion; 3 accepts → tier 1
+detector.Reject(greekWord, target);             // undo of a loanword replacement, or explicit rejection
+pairs.Changed += …;  pairs.Snapshot();  pairs.LearnedSnapshot();                   // persistence, like NeverConvertList
+```
+
+Targets come back cased like the typed word. Learned pairs store `HMAC("loanword\u001f" +
+normalised Greek)`, the lowercase English target and two counts; targets that aren't short
+Latin words are refused, so nothing the user typed can be stored as text by mistake.
+
+**Measured** (evaluation harness, default options): suggestions on 0.15% of words of the
+frequency-weighted Greek list and 0.22% of Greek sentence words; tier 2 on replaces 0.00%
+(weighted); 92.9% of `tests/GreekSwitch.Evaluation/Data/loanwords.tsv` get the right suggestion.
+Median lookup 0.85 ms (unit test limit 5 ms). No BenchmarkDotNet project was added.

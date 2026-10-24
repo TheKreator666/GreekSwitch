@@ -6,8 +6,8 @@ using Xunit.Abstractions;
 namespace GreekSwitch.Evaluation;
 
 /// <summary>
-/// Prints the full evaluation table and fails if any false-positive rate ("wrongly changed")
-/// is above its committed baseline in Data/baseline.json. After an intended improvement, run
+/// Prints the full evaluation table and fails if any false-positive rate ("wrongly changed") or
+/// loanword nuisance rate ("suggested") is above its committed baseline in Data/baseline.json. After an intended improvement, run
 /// with GREEKSWITCH_UPDATE_BASELINE=1 to rewrite the baseline, and commit it with the numbers.
 /// </summary>
 [Collection(EvaluationGroup.Name)]
@@ -18,13 +18,13 @@ public class EvaluationTests(EvaluationData data, ITestOutputHelper output)
     [Fact]
     public void False_positive_rates_do_not_rise_above_the_baseline()
     {
-        var tallies = Evaluator.Run(data);
+        IReadOnlyList<Tally> tallies = [.. Evaluator.Run(data), .. LoanwordEvaluator.Run(data, data.Phonetic)];
         var table = Tally.Table(tallies);
         output.WriteLine(table);
         File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "evaluation-report.md"), table);
 
         var current = tallies
-            .Where(t => t.Measure == "wrongly changed")
+            .Where(t => t.Measure is "wrongly changed" or "suggested")
             .ToDictionary(t => t.Scenario, t => Math.Round(t.Rate, 6));
 
         if (Environment.GetEnvironmentVariable("GREEKSWITCH_UPDATE_BASELINE") == "1")
@@ -40,7 +40,7 @@ public class EvaluationTests(EvaluationData data, ITestOutputHelper output)
             .Select(kv => $"{kv.Key}: {kv.Value:P4} (baseline {(baseline.TryGetValue(kv.Key, out var b) ? b.ToString("P4", System.Globalization.CultureInfo.InvariantCulture) : "missing")})")
             .ToList();
 
-        regressions.Should().BeEmpty("false-positive rates must not rise above Data/baseline.json");
+        regressions.Should().BeEmpty("false-positive and nuisance rates must not rise above Data/baseline.json");
     }
 
     private static string SourceBaselinePath([CallerFilePath] string thisFile = "") =>
