@@ -1,8 +1,11 @@
 # Loanword matching: design
 
-**Status:** Core built (build-order steps 1–4 and 6); popup, hook exception and wiring pending
-(step 5, and calling the detector from `TypingSession`). This is milestone 15 in `CLAUDE.md`.
-See *As built (Core)* at the end for the API and the measured numbers.
+**Status:** built (milestone 15 in `CLAUDE.md`). Core: see *As built (Core)* at the end for the
+API and the measured numbers. Wiring: `TypingSession` checks kept Greek words (`CheckLoanword`),
+`ISuggestionSink` → `SuggestionSink` (App) opens the hook's `SuggestionGate` and shows
+`SuggestionPopup` at `CaretLocator.Find()`; Tab arrives as `InputEventKind.AcceptSuggestion`.
+Pairs are saved in settings.json (`loanwordPairs`, `loanwordLearned`). The popup is shown via
+`GetGUIThreadInfo` or the mouse position; the UI Automation caret fallback is not built.
 
 ## The problem
 

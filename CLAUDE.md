@@ -9,10 +9,10 @@ Typed:  Θέλω να φτιάξω ένα αππλιψατιον poy ua κάνε
 Result: Θέλω να φτιάξω ένα application που θα κάνει πράξεις
 ```
 
-**Status:** v1 is built, tested and published as a single-file exe. The work now is, in order:
-(1) a way to measure decision quality, (2) better recall on short, frequent words, (3) robustness,
-(4) hotkeys and UX, (5) office deployment, (6) loanword suggestions. The code is the source of
-truth for how things work; this file records what must stay true and what to do next.
+**Status:** milestones 9–15 are built (evaluation harness, decision quality, retroactive
+correction, robustness, hotkeys/UX, office deployment, loanword suggestions); milestone 16 has
+design notes only. The code is the source of truth for how things work; this file records what
+must stay true and what to do next.
 
 **Target machines:** ordinary office laptops — Windows 10/11 x64 (some ARM), standard user
 without admin rights, antivirus/EDR, sometimes AppLocker/WDAC, often Remote Desktop or Citrix.
@@ -60,7 +60,9 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
 | Phonetic index builder (CMUdict → `data/phonetic/en.idx`) | `tools/PhoneticIndexBuilder/` |
 | End-to-end smoke test (manual, takes over the keyboard; not in the solution) | `tools/EndToEndDriver/` |
 | Tests | `tests/GreekSwitch.Core.Tests` (incl. `Support/TypingSimulator`), `tests/GreekSwitch.Windows.Tests` |
-| Docs | `README.md`, `SECURITY.md`, `THIRD_PARTY_NOTICES.md`, `docs/manual-test.md`, `docs/loanword-design.md` |
+| Suggestions: popup, caret, Tab gate | `src/GreekSwitch.App/UI/SuggestionPopup.cs`, `src/GreekSwitch.App/SuggestionSink.cs`, `src/GreekSwitch.Windows/Hooks/SuggestionGate.cs`, `src/GreekSwitch.Windows/Focus/CaretLocator.cs` |
+| Hotkeys, convert selection, first run | `src/GreekSwitch.App/UI/` (`HotkeyWindow`, `SelectionConverter`, `FirstRunForm`) |
+| Docs | `README.md`, `SECURITY.md`, `THIRD_PARTY_NOTICES.md`, `docs/manual-test.md`, `docs/loanword-design.md`, `docs/hold-and-release-design.md`, `docs/layouts-design.md`, `docs/greeklish-design.md` |
 
 ## Invariants: do not break these
 
@@ -75,15 +77,17 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
 - When capture is off (disabled, paused, excluded app, password field) the hook enqueues nothing.
   `AppSettings.AlwaysExcludedProcesses` (password managers) can't be overridden by settings.
 - `WordBuffer` wipes its array. Don't add state that keeps typed text beyond the current word,
-  the single armed `UndoRecord`, and (milestone 11) the keys of the last few words of the current run.
+  the single armed `UndoRecord`, the single pending suggestion (until the next key), the last
+  completed word (convert-last-word hotkey), and (milestone 11) the keys of the last few words of the current run.
 - Keep the WER exclusion and the `DropUnusedWpfNatives` target: nothing is extracted to disk at run time.
 - Any change to what is captured, stored or logged updates `SECURITY.md` in the same commit.
 
 **Input safety**
 - The hook callback only reads key/modifier state, enqueues, and returns. No COM/UI Automation,
   no I/O, no locks, no waiting. Windows silently removes slow low-level hooks. The hook never
-  swallows keys, with one planned exception: Tab while a loanword suggestion is visible
-  (`docs/loanword-design.md`), decided by reading a single volatile flag.
+  swallows keys, with one exception: a plain Tab (and its key-up) while a suggestion is visible,
+  decided by reading the single `SuggestionGate` flag. If the suggestion is gone when the worker
+  sees it, the worker sends the Tab on.
 - Ignore events with `LLKHF_INJECTED` (our own output also carries `InputBuilder.Signature`).
 - A correction either happens completely or not at all. `Corrector.Replace` checks, in order:
   modifier held → focus moved → Enter/Tab into a command window → Shift held → switch layout
@@ -118,7 +122,7 @@ sentences per language. (An earlier Python port gave 0.03% / 68% / 70% / 72% / 8
 Word-level rows type a name capitalised when its only dictionary entry is capitalised (from 10b
 on; the lowercase frequency lists otherwise overstate false positives).
 
-Loanword detector (milestone 15, Core only, not wired yet), default options: a suggestion on
+Loanword detector (milestone 15), default options: a suggestion on
 0.15% of words of the frequency-weighted Greek list (all ~43k words) and 0.22% of the words of the
 Greek sentences; with tier 2 on, 0.00% (weighted) replaced. 92.9% of the 70 hand-written
 transliterations in `Data/loanwords.tsv` get the right suggestion. Both nuisance rates are gated.
@@ -247,6 +251,10 @@ Detection will never be perfect, so give the user an escape hatch.
 - **Per-app mode** — auto / suggest-only / off — replaces the plain exclusion list. Suggest-only
   depends on the popup from milestone 15, so add that mode with it.
 
+**Done (13):** 13a core + 13b wiring (`HotkeyWindow`, `SelectionConverter`, always-convert list,
+tray flash, `FirstRunForm`); per-app mode built with milestone 15 as `suggestOnlyProcesses`
+next to the exclusion list (off) and the default (auto).
+
 ### 14. Office deployment
 - **Code signing:** the CI step exists as a placeholder. Signing is what gets past SmartScreen and
   makes EDR and AppLocker/WDAC allow-listing practical (allow by publisher instead of by hash).
@@ -277,13 +285,12 @@ Build it as designed in **`docs/loanword-design.md`**:
 - privacy-preserving storage of learned pairs;
 - a 5 ms median-lookup test.
 
-Follow that doc's build order. **Status:** Core built (steps 1–4 and 6: phonemes, index,
-matcher, tiers, hashed pair store, promotion, evaluation rows). Remaining: step 5 (popup, caret,
-Tab exception in the hook), calling `LoanwordDetector.Check` from `TypingSession` after a Keep,
-loading the index in the App, saving the pair store in settings.json, the Settings UI for pairs,
-and the SECURITY.md update for what gets stored.
+Follow that doc's build order. **Done (15):** all six steps. Not built: the UI Automation caret
+fallback for the popup (it uses `GetGUIThreadInfo`, then the mouse position) and a
+BenchmarkDotNet project (the 5 ms median test covers it). Known weak spots: some ties rank the
+wrong word (`ρίλιζ` → rallies, `κλάιντ` → cloud), capitalised unknown names can get a suggestion.
 
-### 16. Later (design note first, then build)
+### 16. Later (design notes written: `docs/hold-and-release-design.md`, `docs/layouts-design.md`, `docs/greeklish-design.md`)
 - **Hold-and-release input.** Let the hook swallow the delimiter (and keys typed while a decision
   is pending), then inject correction + delimiter + held keys. This would allow correcting words
   ended by Enter (chat apps) and remove skipped corrections for fast typists. It's high risk:

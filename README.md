@@ -80,6 +80,30 @@ The convert hotkeys do nothing where GreekSwitch is passive (password fields, pa
 managers, excluded apps, while disabled or paused). Convert selection is never used in a
 terminal, where Ctrl+C would interrupt the running command.
 
+## Loanword suggestions
+
+Greeks often write English words in Greek letters: `κοντέινερ`, `κομπιούτερ`, `σέρβερ`. That's not
+a layout mistake, so GreekSwitch doesn't change it by itself. Instead, a small popup appears next
+to the caret, `container  Tab ↹`:
+
+- **Tab** replaces the word (and Backspace right after puts it back);
+- any other key dismisses the popup, and the key goes through as usual;
+- it disappears after 4 seconds.
+
+After you accept the same pair three times it's replaced automatically. Undoing it, or
+dismissing it three times, stops that. Pairs you type into Settings (`κοντέινερ = container`) are
+always replaced. With *replace clear tech terms automatically* on (off by default), Greek
+spellings that aren't Greek words and match a tech term closely (`ντεπλόι` → `deploy`) are
+replaced without asking.
+
+Matching compares sounds: Greek by spelling rules, English from the CMU Pronouncing Dictionary
+(see [docs/loanword-design.md](docs/loanword-design.md)). Common Greek words never get a
+suggestion; on ordinary Greek text a suggestion shows for about 0.2% of words.
+
+**Suggest-only apps:** in the apps you list in Settings, layout corrections are offered the
+same way (Tab accepts) instead of being made automatically. Use it for apps where a surprise
+retype would be costly.
+
 ## Settings
 
 The Settings dialog edits `%APPDATA%\GreekSwitch\settings.json`. You can also edit the file by
@@ -100,7 +124,11 @@ hand while GreekSwitch is closed:
 | `convertLastWordHotkey` / `convertSelectionHotkey` / `toggleHotkey` | `Ctrl+Alt+Space` / `Ctrl+Alt+Shift+Space` / `Ctrl+Alt+Shift+G` | The hotkeys (see *Hotkeys*). Empty turns one off. |
 | `flashOnCorrection` | `true` | Flash the tray icon green for a moment after a correction. |
 | `fixAccidentalCapsLock` | `false` | A word typed with Caps Lock on by accident (`hELLO`) becomes `Hello`, and Caps Lock is turned off. |
-| `suggestLoanwords` | `true` | Suggest the English spelling of loanwords typed in Greek (`κοντέινερ` → `container`). Reserved for the loanword feature; the policy `DisableLoanwordSuggestions` forces it off. |
+| `suggestLoanwords` | `true` | Suggest the English spelling of loanwords typed in Greek (`κοντέινερ` → `container`; see *Loanword suggestions*). The policy `DisableLoanwordSuggestions` forces it off. |
+| `autoReplaceLoanwords` | `false` | Also replace clear tech terms automatically when the Greek spelling isn't a Greek word (`ντεπλόι` → `deploy`). |
+| `loanwordPairs` | `[]` | Pairs you typed into Settings (`{ "greek": "κοντέινερ", "target": "container" }`), always replaced. |
+| `loanwordLearned` | | Pairs learned from accepted and undone suggestions: an HMAC hash of the Greek word (same key as above), the English word and the counts. Cleared by *Forget learned words*. |
+| `suggestOnlyProcesses` | `[]` | Executables where corrections are only suggested (Tab accepts), never made automatically. |
 | `firstRunCompleted` | `false` | The first-run dialog has been shown. Existing installs are set to `true` on upgrade. |
 | `debugLogText` | `false` | **Debug builds only**: log the words themselves. Compiled out of Release builds. |
 
@@ -185,7 +213,9 @@ names that read as words in both languages (`Tom`/`Τομ`).
 
 There is no network access of any kind, no telemetry and no update checks. Keystrokes and words
 are never written to disk. The only readable words ever stored are the ones you type into the
-never-convert list yourself; words learned from undo are stored only as keyed hashes.
+never-convert list or the loanword pairs yourself; words learned from undo, the convert hotkey
+and suggestions are stored only as keyed hashes (for loanwords, with the English dictionary word
+they were matched to).
 GreekSwitch is fully passive in password fields (detected with UI Automation), in excluded
 apps, and always in password managers. A correction is only typed into the control the word
 was typed into, and Enter is never retyped into a terminal. Details: [SECURITY.md](SECURITY.md).

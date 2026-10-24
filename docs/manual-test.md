@@ -214,6 +214,30 @@ these checks. Policies are read at start and when Settings opens.
 - [ ] Sections 0, 1 (the reference sentence), 7 (undo) and the Convert last word hotkey work.
 - [ ] Working set after a few minutes of typing is in the same range as on x64 (about 90 MB).
 
+## 13. Loanword suggestions and suggest-only apps (milestone 15)
+
+- [ ] In Notepad (GR), type `κοντέινερ `. A small popup `container  Tab ↹` appears just below the
+      word; Notepad keeps the focus (the caret still blinks, the title bar stays active).
+- [ ] Press **Tab**: the word becomes `container ` and no Tab is typed. Backspace right after puts
+      `κοντέινερ` back.
+- [ ] Type `κοντέινερ ` again and press any letter instead: the popup goes and the letter is typed.
+      Wait 4 s without typing: the popup goes, and Tab is then an ordinary Tab.
+- [ ] Accept `κοντέινερ` three times (Tab each time). The fourth time it's replaced without asking.
+- [ ] Ordinary Greek (`Θέλω να φτιάξω ένα σπίτι`) shows no popup. Typed without accents
+      (`θελω να φτιαξω ενα σπιτι`) neither.
+- [ ] Tab with no popup visible indents as usual (Word, a browser text area, Tab between form
+      fields in Chrome).
+- [ ] Settings → *Always replace these words*: add `ρίλιζ = release`. Typing `ρίλιζ ` gives `release `.
+      An invalid line (`ρίλιζ`) is refused with a message.
+- [ ] Settings → *replace clear tech terms automatically* on: `ντεπλόι ` becomes `deploy ` at once.
+- [ ] Popup position: correct in Notepad and Word; in Chrome/Teams (no caret reported) it appears
+      near the mouse. On a second monitor with different scaling it's on the right monitor.
+- [ ] Policy `DisableLoanwordSuggestions` = 1: no popups; the Settings checkbox is locked.
+- [ ] **Suggest-only:** add `notepad.exe` to *Only suggest corrections* in Settings. Type
+      `kalhm;era ` in EN: nothing changes, the popup offers `καλημέρα`; Tab applies it and switches
+      to GR. Remove notepad.exe again: corrections are automatic again.
+- [ ] Settings.json contains `container` but never `κοντέινερ` in `loanwordLearned`.
+
 ## 9. Privacy spot checks
 
 - [ ] After a session of typing, search the log for words you typed. None appear.

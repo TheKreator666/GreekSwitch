@@ -11,6 +11,8 @@ page explains what it captures, what it doesn't, and why.
 | The keys of the last 1–3 completed words of the current run (same field, separated only by spaces) | So that after a confident correction the words just before it can be fixed too ("den θέλω" → "δεν θέλω") | Memory only. Wiped on any reset, punctuation, Enter/Tab, a Backspace into earlier text, or when a word leaves the 3-word window. |
 | The keys of the last completed word and its delimiter | So the *Convert last word* hotkey can convert it after you've pressed Space | Memory only. Wiped on any reset (click, focus change, caret key, shortcut) and replaced by the next word. |
 | The selected text, only when you press the *Convert selection* hotkey | To convert it to the other layout | Copied by the app itself (GreekSwitch sends Ctrl+C), converted in memory, pasted back (Ctrl+V), and then your previous clipboard content is put back. Never stored or logged. See *The clipboard* below. |
+| A suggestion on screen (loanword or, in suggest-only apps, layout correction): the word just typed, its suggested replacement, and its keys | So Tab can apply it | Memory only, until the next key, click or focus change. |
+| Where the caret is (screen position, from `GetGUIThreadInfo`; the mouse position if the app doesn't report a caret) | To show the suggestion popup next to the text | Memory only |
 | Which control had keyboard focus for each key (a window handle) | So a correction is only typed into the control the word was typed into | Memory only |
 | That a mouse button was pressed (not where) | A click may move the caret, so the word is forgotten | Nowhere; it only clears the buffer |
 | The foreground app's executable name (e.g. `notepad.exe`) | To honour the exclusion list | Memory only |
@@ -70,7 +72,7 @@ word* hotkey). Hashes learned before the policy was set still apply until the us
 
 | Location | Contents |
 |---|---|
-| `%APPDATA%\GreekSwitch\settings.json` | Settings, the exclusion list, the hotkeys, the never-convert words **you typed into Settings** (readable, so you can edit them), the **hashes** of words learned from undo and from the *Convert last word* hotkey, and the DPAPI-encrypted key for those hashes |
+| `%APPDATA%\GreekSwitch\settings.json` | Settings, the exclusion and suggest-only lists, the hotkeys, the never-convert words and loanword pairs **you typed into Settings** (readable, so you can edit them), the **hashes** of words learned from undo and from the *Convert last word* hotkey, the loanwords learned from accepted or undone suggestions (an HMAC **hash of the Greek word**, the English dictionary word it was matched to, and accept/reject counts), and the DPAPI-encrypted key for those hashes |
 | `%LOCALAPPDATA%\GreekSwitch\greekswitch.log` (+ `.1`) | Event log without text, rolled at 1 MB |
 | `HKCU\Software\Microsoft\Windows\Windows Error Reporting\ExcludedApplications` | The exe name, so crashes aren't reported or dumped |
 | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\GreekSwitch` | Only if you turn on "Start with Windows" |
@@ -101,6 +103,16 @@ the word. It does nothing else to other processes. Safeguards:
 
 It also registers its three hotkeys with `RegisterHotKey` (on the UI thread, not in the hook).
 Windows then delivers those key combinations to GreekSwitch instead of the focused app.
+
+### The one key it holds back
+
+The keyboard hook passes every key through, with one exception: **Tab while a suggestion
+popup is visible**. Then a Tab with no modifiers is swallowed (with its key-up) and accepts the
+suggestion. The hook decides this by reading a single flag, set while the popup shows and
+cleared by any key. If the suggestion has gone by the time the worker sees the Tab (a key or
+focus change raced it), the Tab is sent on to the app. The popup is a non-activating, topmost
+tool window: it never takes focus, and it can't be clicked to accept. Loanword logs carry only
+the tier, a score bucket and lengths.
 
 ### The clipboard
 
