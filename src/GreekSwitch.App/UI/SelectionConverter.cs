@@ -160,18 +160,22 @@ internal sealed class SelectionConverter
                 return false;
             }
 
-            _clipboard.SetPrivateText(converted);
-            if (!Send(SelectionKeys.Paste(), "Ctrl+V"))
+            // Windows 11 Notepad drops trailing whitespace from a paste: type trailing spaces as keys.
+            var body = converted.TrimEnd(' ');
+            _clipboard.SetPrivateText(body);
+            if (!Send(SelectionKeys.Paste(trailingSpaces: converted.Length - body.Length), "Ctrl+V"))
             {
                 return false;
             }
 
+            // Switch only once the paste is done: a layout change while the app is still
+            // pasting can disturb it (Windows 11 Notepad lost a trailing space).
+            await _delay(PasteSettle).ConfigureAwait(true);
             if (TextConverter.Script(converted) is { } lang)
             {
                 _layouts.SwitchTo(lang);
             }
 
-            await _delay(PasteSettle).ConfigureAwait(true);
             _logger.LogInformation("Selection converted, length {Length}", converted.Length);
             return true;
         }

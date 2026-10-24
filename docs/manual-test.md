@@ -6,6 +6,10 @@ Greek and English (US) layouts installed, using `publish/GreekSwitch.exe`.
 
 Tip: make the active layout visible in the taskbar, so you can see GreekSwitch switch it.
 
+Before a manual pass, `tools/EndToEndDriver` runs a quick automated smoke test in Notepad
+(wrong-layout sentences, both convert hotkeys, undo, clipboard restore) against a Debug build in
+test mode; see the comment at the top of its `Program.cs`. It doesn't replace the checks below.
+
 ## 0. Start-up
 
 - [ ] Double-click `GreekSwitch.exe`. The "αb" tray icon appears (grey, then blue within about 2 s).

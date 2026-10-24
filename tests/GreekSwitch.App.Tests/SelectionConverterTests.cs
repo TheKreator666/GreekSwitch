@@ -36,6 +36,17 @@ public sealed class SelectionConverterTests
     }
 
     [Fact]
+    public async Task Trailing_spaces_are_typed_after_the_paste_not_pasted()
+    {
+        _app.Selection = "kalhm;era sas  ";
+
+        (await Converter().ConvertAsync()).Should().BeTrue();
+
+        _app.Pasted.Should().Be("καλημέρα σας  ", "Windows 11 Notepad drops trailing whitespace from a paste");
+        _app.PastedClipboardText.Should().Be("καλημέρα σας");
+    }
+
+    [Fact]
     public async Task Without_a_selection_nothing_is_pasted_and_the_clipboard_is_untouched()
     {
         _app.Selection = null;
@@ -164,6 +175,8 @@ public sealed class SelectionConverterTests
 
         public bool PastedWasPrivate { get; private set; }
 
+        public string? PastedClipboardText { get; private set; }
+
         public int KeysSent { get; private set; }
 
         public Action? OnCopy { get; set; }
@@ -179,8 +192,11 @@ public sealed class SelectionConverterTests
             }
             else if (key == 'V')
             {
-                Pasted = Clipboard.Contents;
+                // Keys typed after Ctrl+V in the same batch land after the pasted text.
+                var spaces = inputs.Count(i => i.U.ki.wVk == VirtualKeys.Space && (i.U.ki.dwFlags & 2) == 0);
+                Pasted = Clipboard.Contents + new string(' ', spaces);
                 PastedWasPrivate = Clipboard.ContentsPrivate;
+                PastedClipboardText = Clipboard.Contents;
             }
 
             return (uint)inputs.Length;

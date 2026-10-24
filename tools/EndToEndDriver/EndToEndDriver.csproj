@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Manual end-to-end check (not in the solution or CI): types into a fresh Notepad tab with
+    SendInput, against a Debug GreekSwitch started with GREEKSWITCH_TEST_ACCEPT_INJECTED=1.
+    See Program.cs for how to run it.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GreekSwitch.Windows\GreekSwitch.Windows.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -12,7 +12,9 @@ public static class SelectionKeys
 
     public static INPUT[] Copy() => InputBuilder.Chord([VirtualKeys.Control, KeyC]);
 
-    public static INPUT[] Paste() => InputBuilder.Chord([VirtualKeys.Control, KeyV]);
+    /// <summary>Ctrl+V, then <paramref name="trailingSpaces"/> Space presses (in the same batch, so they land after the paste).</summary>
+    public static INPUT[] Paste(int trailingSpaces = 0) =>
+        [.. InputBuilder.Chord([VirtualKeys.Control, KeyV]), .. Enumerable.Repeat(InputBuilder.Chord([VirtualKeys.Space]), trailingSpaces).SelectMany(k => k)];
 
     /// <summary>GetClipboardSequenceNumber: changes whenever any program writes the clipboard.</summary>
     public static uint ClipboardSequence() => GetClipboardSequenceNumber();

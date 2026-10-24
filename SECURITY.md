@@ -101,7 +101,8 @@ the running command), and:
 3. converts the text in memory and puts it on the clipboard **marked to stay out of clipboard
    history and cloud clipboard** (`CanIncludeInClipboardHistory` = 0,
    `CanUploadToCloudClipboard` = 0, `ExcludeClipboardContentFromMonitorProcessing`);
-4. sends Ctrl+V, waits half a second for the app to paste, and switches the layout;
+4. sends Ctrl+V (trailing spaces are typed as Space presses, because some apps drop them from
+   a paste), waits half a second for the app to paste, and switches the layout;
 5. puts your previous clipboard content back (with the same markers, so it isn't added to the
    history a second time).
 

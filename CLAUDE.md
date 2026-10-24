@@ -55,6 +55,7 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
 | Focus, password fields, terminals | `src/GreekSwitch.Windows/Focus/` |
 | Tray, settings, logging, composition root | `src/GreekSwitch.App/` (`GreekSwitchHost` wires everything) |
 | Trigram model builder | `tools/NgramBuilder/` |
+| End-to-end smoke test (manual, takes over the keyboard; not in the solution) | `tools/EndToEndDriver/` |
 | Tests | `tests/GreekSwitch.Core.Tests` (incl. `Support/TypingSimulator`), `tests/GreekSwitch.Windows.Tests` |
 | Docs | `README.md`, `SECURITY.md`, `THIRD_PARTY_NOTICES.md`, `docs/manual-test.md`, `docs/loanword-design.md` |
 
