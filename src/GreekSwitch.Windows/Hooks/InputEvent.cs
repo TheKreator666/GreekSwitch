@@ -15,6 +15,7 @@ public enum InputEventKind
     PasswordChecked,
     SessionReset,
     ConvertLastWord,
+    AcceptSuggestion,
     HookError,
 }
 
@@ -58,6 +59,9 @@ public readonly record struct InputEvent(
 
     /// <summary>The "convert last word" hotkey was pressed.</summary>
     public static InputEvent ConvertLastWord() => new(InputEventKind.ConvertLastWord);
+
+    /// <summary>Tab was pressed (and swallowed) while a loanword suggestion was visible.</summary>
+    public static InputEvent AcceptSuggestion() => new(InputEventKind.AcceptSuggestion);
 
     public static InputEvent Error(Exception ex) => new(InputEventKind.HookError, ErrorType: ex.GetType().Name);
 }

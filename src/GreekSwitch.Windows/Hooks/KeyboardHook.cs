@@ -13,6 +13,8 @@ namespace GreekSwitch.Windows.Hooks;
 /// WH_KEYBOARD_LL hook. The callback only reads the key and the modifier state and enqueues
 /// them: Windows silently removes low-level hooks that are slow to return. Injected events,
 /// including our own SendInput output, are ignored. Install it on a thread that runs a message loop.
+/// It never swallows a key, with one exception: Tab (no modifiers) while a loanword suggestion is
+/// visible, decided by reading one flag (<see cref="SuggestionGate"/>).
 /// </summary>
 internal sealed class KeyboardHook : IDisposable
 {
@@ -25,7 +27,9 @@ internal sealed class KeyboardHook : IDisposable
     private readonly HookProc _proc; // kept in a field so the GC can't collect the callback
     private nint _hook;
     private readonly LiveKeyboardState _keyboard;
+    private readonly SuggestionGate _suggestion;
     private bool _capsLock;
+    private bool _swallowTabUp;
 
     public KeyboardHook(
         ChannelWriter<InputEvent> writer,
@@ -34,8 +38,10 @@ internal sealed class KeyboardHook : IDisposable
         LiveKeyboardState keyboard,
         bool acceptForeignInjected = false,
         Action? keyDropped = null,
-        Health.HookActivity? activity = null)
+        Health.HookActivity? activity = null,
+        SuggestionGate? suggestion = null)
     {
+        _suggestion = suggestion ?? new SuggestionGate();
         _writer = writer;
         _captureKeys = captureKeys;
         _typeAhead = typeAhead;
@@ -92,6 +98,16 @@ internal sealed class KeyboardHook : IDisposable
 
                     if (_captureKeys())
                     {
+                        // Any key closes a visible suggestion; only a plain Tab accepts it, and is swallowed.
+                        if (_suggestion.Visible && _suggestion.TryTake() && vk == VirtualKeys.Tab
+                            && !IsDown(VirtualKeys.Shift) && !IsDown(VirtualKeys.Control) && (data.flags & LLKHF_ALTDOWN) == 0
+                            && !IsDown(VirtualKeys.LWin) && !IsDown(VirtualKeys.RWin))
+                        {
+                            _swallowTabUp = true; // the app must not see a key-up without its key-down
+                            _writer.TryWrite(InputEvent.AcceptSuggestion());
+                            return 1;
+                        }
+
                         var typedCount = _typeAhead.OnKeyCaptured(isTypingKey: !VirtualKeys.IsModifier(vk));
                         var (layout, focus) = Layouts.KeyboardLayouts.ForegroundLayout();
                         _writer.TryWrite(InputEvent.ForKey(
@@ -111,6 +127,12 @@ internal sealed class KeyboardHook : IDisposable
                         _keyDropped(); // only counted, never queued: the word in progress is now incomplete
                     }
                 }
+            }
+            else if (_swallowTabUp && nCode == HC_ACTION && wParam is WM_KEYUP or WM_SYSKEYUP
+                && ((KBDLLHOOKSTRUCT*)lParam)->vkCode == VirtualKeys.Tab)
+            {
+                _swallowTabUp = false;
+                return 1;
             }
         }
 #pragma warning disable CA1031 // An exception must never cross back into user32; report it to the worker instead.
