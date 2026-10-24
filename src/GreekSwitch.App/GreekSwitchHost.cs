@@ -54,6 +54,7 @@ internal sealed class GreekSwitchHost : IDisposable
     private readonly CorrectionWorker _workerLoop;
     private readonly ILayoutSwitcher _layouts;
     private readonly LoanwordDetector _loanwords;
+    private readonly SuggestionSink _suggestions;
     private readonly CancellationTokenSource _stop = new();
     private readonly ILogger _logger;
     private readonly System.Threading.Timer _watchdog;
@@ -64,9 +65,10 @@ internal sealed class GreekSwitchHost : IDisposable
     private volatile bool _sessionLocked;
     private volatile HostHealth _health = HostHealth.Healthy;
 
-    private GreekSwitchHost(InputMonitor monitor, UiaThread uia, DecisionEngine engine, TypingSession session, CorrectionWorker worker, Corrector corrector, ILayoutSwitcher layouts, TextConverter converter, LoanwordDetector loanwords, SuggestionSink suggestions, ILogger logger)
+    private GreekSwitchHost(InputMonitor monitor, UiaThread uia, DecisionEngine engine, TypingSession session, CorrectionWorker worker, ILayoutSwitcher layouts, TextConverter converter, LoanwordDetector loanwords, SuggestionSink suggestions, ILogger logger)
     {
         _loanwords = loanwords;
+        _suggestions = suggestions;
         suggestions.Shown += (_, e) => SuggestionShown?.Invoke(this, e);
         suggestions.Hidden += (_, _) => SuggestionHidden?.Invoke(this, EventArgs.Empty);
         _uia = uia;
@@ -77,7 +79,7 @@ internal sealed class GreekSwitchHost : IDisposable
         _layouts = layouts;
         TextConverter = converter;
         _logger = logger;
-        corrector.Applied += (_, _) => Corrected?.Invoke(this, EventArgs.Empty);
+        session.Corrected += (_, _) => Corrected?.Invoke(this, EventArgs.Empty); // not on undo
         StartWorker();
         _watchdog = new System.Threading.Timer(_ => CheckHooks(), null, WatchdogInterval, WatchdogInterval);
     }
@@ -182,7 +184,7 @@ internal sealed class GreekSwitchHost : IDisposable
 
         var worker = new CorrectionWorker(monitor, session, engine, layouts, new PasswordFieldDetector(), policy, uia, logger);
         logger.LogInformation("GreekSwitch started");
-        return new GreekSwitchHost(monitor, uia, engine, session, worker, corrector, layouts, new TextConverter(greek, english), loanwords, suggestions, logger);
+        return new GreekSwitchHost(monitor, uia, engine, session, worker, layouts, new TextConverter(greek, english), loanwords, suggestions, logger);
     }
 
     /// <summary>Applies changed settings. Safe from the UI thread: options are swapped atomically.</summary>
@@ -194,8 +196,11 @@ internal sealed class GreekSwitchHost : IDisposable
         NotifyPolicyChanged();
     }
 
-    /// <summary>The popup timed out: Tab is an ordinary Tab again.</summary>
-    public void SuggestionExpired() => _monitor.Suggestion.Close();
+    /// <summary>UI thread: the popup for suggestion <paramref name="id"/> is on screen.</summary>
+    public void SuggestionOpened(long id) => _suggestions.Opened(id);
+
+    /// <summary>UI thread: the popup for suggestion <paramref name="id"/> timed out; Tab is an ordinary Tab again.</summary>
+    public void SuggestionExpired(long id) => _suggestions.Expired(id);
 
     public void NotifyPolicyChanged() => _monitor.NotifyPolicyChanged();
 

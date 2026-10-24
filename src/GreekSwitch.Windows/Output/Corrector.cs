@@ -85,9 +85,6 @@ public sealed class Corrector : ICorrectionOutput
         _textVerifier = textVerifier ?? new NoTextVerifier();
     }
 
-    /// <summary>Raised (on the worker thread) after a correction was sent: drives the tray flash.</summary>
-    public event EventHandler? Applied;
-
     /// <summary>Extra wait after the focused window reports a layout switch, before typing.</summary>
     public TimeSpan SwitchSettle { get; init; }
 
@@ -165,7 +162,6 @@ public sealed class Corrector : ICorrectionOutput
             return false;
         }
 
-        Applied?.Invoke(this, EventArgs.Empty);
         return true;
     }
 

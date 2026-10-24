@@ -22,16 +22,18 @@ internal sealed class WinFormsClipboard : IClipboardAccess
 
     public uint SequenceNumber => SelectionKeys.ClipboardSequence();
 
-    public object? Backup()
+    public bool TryBackup(out object? backup)
     {
+        backup = null;
         var data = Clipboard.GetDataObject();
-        if (data is null)
+        var formats = data?.GetFormats(autoConvert: false) ?? [];
+        if (data is null || formats.Length == 0)
         {
-            return null;
+            return true; // empty: restoring means emptying it again
         }
 
         var copy = new DataObject();
-        foreach (var format in data.GetFormats(autoConvert: false))
+        foreach (var format in formats)
         {
             try
             {
@@ -47,7 +49,13 @@ internal sealed class WinFormsClipboard : IClipboardAccess
             }
         }
 
-        return copy.GetFormats().Length > 0 ? copy : null;
+        if (copy.GetFormats().Length == 0)
+        {
+            return false; // content we can't read back: don't overwrite it
+        }
+
+        backup = copy;
+        return true;
     }
 
     public void Restore(object? backup)

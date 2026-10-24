@@ -15,6 +15,7 @@ internal sealed class SuggestionPopup : Form
     private readonly Label _text = new() { AutoSize = true, Margin = new Padding(0), Padding = new Padding(6, 3, 2, 3) };
     private readonly Label _hint = new() { AutoSize = true, Text = "Tab ↹", Margin = new Padding(0), Padding = new Padding(2, 3, 6, 3) };
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = ShowMs };
+    private long _id;
 
     public SuggestionPopup()
     {
@@ -35,13 +36,14 @@ internal sealed class SuggestionPopup : Form
         Controls.Add(row);
         _timer.Tick += (_, _) =>
         {
+            var id = _id;
             HideSuggestion();
-            Expired?.Invoke(this, EventArgs.Empty);
+            Expired?.Invoke(this, id);
         };
     }
 
-    /// <summary>Hidden by its timeout (not by a key): the caller closes the hook's gate.</summary>
-    public event EventHandler? Expired;
+    /// <summary>Hidden by its timeout (not by a key), with the suggestion's id: the caller closes the hook's gate for it.</summary>
+    public event EventHandler<long>? Expired;
 
     protected override bool ShowWithoutActivation => true;
 
@@ -56,8 +58,9 @@ internal sealed class SuggestionPopup : Form
     }
 
     /// <summary>Shows <paramref name="target"/> at a screen position (below the caret), kept on that monitor.</summary>
-    public void ShowSuggestion(string target, int x, int y)
+    public void ShowSuggestion(long id, string target, int x, int y)
     {
+        _id = id;
         _text.Text = target;
         var screen = Screen.FromPoint(new Point(x, y)).WorkingArea;
         var size = PreferredSize;

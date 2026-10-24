@@ -181,9 +181,75 @@ public class SuggestionTests(LanguageDataFixture data)
         output.Should().NotContainAny("κοντέινερ", "container", "kalhm", "καλημέρα");
     }
 
-    private TypingSimulator Simulator(SessionOptions? session = null, LoanwordOptions? options = null)
+    [Fact]
+    public void Suggest_only_apps_get_no_automatic_loanword_replacement_either()
     {
-        var detector = new LoanwordDetector(new LoanwordPairStore(hasher: new HmacWordHasher(Key)), data.Dictionaries, data.Frequencies, options: options);
+        var sim = Simulator(options: new LoanwordOptions { AutoReplaceStrongMatches = true });
+        sim.Session.SuggestOnly = true;
+
+        sim.TypeIn(Lang.Greek, "ντεπλόι ");
+
+        sim.Screen.Should().Be("ντεπλόι ");
+        sim.Suggestion.Should().Be("deploy");
+    }
+
+    [Fact]
+    public void A_short_pair_typed_into_settings_still_applies()
+    {
+        var pairs = new LoanwordPairStore([new LoanwordPair("δεη", "DEH")], hasher: new HmacWordHasher(Key));
+        var sim = Simulator(pairs: pairs);
+
+        sim.TypeIn(Lang.Greek, "δεη ");
+
+        sim.Screen.Should().Be("DEH ");
+    }
+
+    [Fact]
+    public void Ignored_suggestions_in_suggest_only_apps_dont_shift_the_context()
+    {
+        var sim = new TypingSimulator(data, session: new SessionOptions());
+        sim.Session.SuggestOnly = true;
+
+        sim.TypeIn(Lang.English, "kalhm;era kalhm;era kalhm;era ");
+
+        sim.Engine.ContextLanguage.Should().NotBe(Lang.Greek, "nothing was converted: the text is still as typed");
+    }
+
+    [Fact]
+    public void Corrected_is_raised_for_corrections_but_not_for_undo()
+    {
+        var sim = Simulator();
+        var corrected = 0;
+        sim.Session.Corrected += (_, _) => corrected++;
+
+        sim.TypeIn(Lang.Greek, "κοντέινερ ");
+        sim.Tab();
+        corrected.Should().Be(1);
+
+        sim.Backspace();
+        corrected.Should().Be(1, "an undo isn't a correction: no tray flash");
+    }
+
+    [Fact]
+    public void Loanword_paths_that_fail_or_replace_log_no_text()
+    {
+        var replaced = Simulator(options: new LoanwordOptions { AutoReplaceStrongMatches = true }).TypeIn(Lang.Greek, "ντεπλόι ");
+        var refused = Simulator(options: new LoanwordOptions { AutoReplaceStrongMatches = true });
+        refused.RefuseReplacements = true;
+        refused.TypeIn(Lang.Greek, "ντεπλόι ");
+        var notApplied = Simulator().TypeIn(Lang.Greek, "κοντέινερ ");
+        notApplied.RefuseReplacements = true;
+        notApplied.Tab();
+
+        var output = replaced.Logger.AllOutput + refused.Logger.AllOutput + notApplied.Logger.AllOutput;
+        output.Should().Contain("Loanword replaced").And.Contain("Loanword replacement not applied")
+            .And.Contain("Suggestion shown").And.Contain("Suggestion not applied");
+        output.Should().NotContainAny("ντεπλόι", "deploy", "κοντέινερ", "container");
+    }
+
+    private TypingSimulator Simulator(SessionOptions? session = null, LoanwordOptions? options = null, LoanwordPairStore? pairs = null)
+    {
+        var detector = new LoanwordDetector(pairs ?? new LoanwordPairStore(hasher: new HmacWordHasher(Key)), data.Dictionaries, data.Frequencies, options: options);
         detector.UseIndex(data.Phonetic);
         return new TypingSimulator(data, session: session ?? WithLoanwords, loanwords: detector);
     }

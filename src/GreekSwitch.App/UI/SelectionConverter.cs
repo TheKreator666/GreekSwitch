@@ -13,8 +13,11 @@ internal interface IClipboardAccess
     /// <summary>Changes whenever any program writes the clipboard.</summary>
     uint SequenceNumber { get; }
 
-    /// <summary>A copy of every format that can be read now; null if the clipboard is empty.</summary>
-    object? Backup();
+    /// <summary>
+    /// A copy of every format that can be read now (null if the clipboard is empty). False if the
+    /// clipboard has content but none of it could be read (delay-rendered Office data, private formats).
+    /// </summary>
+    bool TryBackup(out object? backup);
 
     /// <summary>Puts a <see cref="Backup"/> back (null: empties the clipboard), kept out of clipboard history.</summary>
     void Restore(object? backup);
@@ -130,7 +133,13 @@ internal sealed class SelectionConverter
             return false;
         }
 
-        var backup = _clipboard.Backup();
+        // Ctrl+C overwrites the clipboard, so only go ahead if what's there now can be put back.
+        if (!_clipboard.TryBackup(out var backup))
+        {
+            _logger.LogInformation("Selection not converted: the clipboard's content can't be saved and restored");
+            return false;
+        }
+
         var before = _clipboard.SequenceNumber;
         if (!Send(SelectionKeys.Copy(), "Ctrl+C") || !await CopiedAsync(before).ConfigureAwait(true))
         {

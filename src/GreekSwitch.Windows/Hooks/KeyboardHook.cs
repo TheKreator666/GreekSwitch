@@ -93,6 +93,13 @@ internal sealed class KeyboardHook : IDisposable
 
                 // Never our own output; other injected input only in the opt-in Debug test mode.
                 var injected = (data.flags & LLKHF_INJECTED) != 0;
+
+                // Tab still held after accepting a suggestion: its auto-repeat belongs to the swallowed press.
+                if (_swallowTabUp && vk == VirtualKeys.Tab && !injected)
+                {
+                    return 1;
+                }
+
                 if (!injected || (_acceptForeignInjected && data.dwExtraInfo != InputBuilder.Signature))
                 {
 
@@ -129,7 +136,8 @@ internal sealed class KeyboardHook : IDisposable
                 }
             }
             else if (_swallowTabUp && nCode == HC_ACTION && wParam is WM_KEYUP or WM_SYSKEYUP
-                && ((KBDLLHOOKSTRUCT*)lParam)->vkCode == VirtualKeys.Tab)
+                && ((KBDLLHOOKSTRUCT*)lParam)->vkCode == VirtualKeys.Tab
+                && (((KBDLLHOOKSTRUCT*)lParam)->flags & LLKHF_INJECTED) == 0) // the user's key-up, not ours
             {
                 _swallowTabUp = false;
                 return 1;

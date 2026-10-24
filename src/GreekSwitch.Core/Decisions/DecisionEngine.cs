@@ -85,6 +85,18 @@ public sealed class DecisionEngine
     public Decision Decide(IReadOnlyList<KeyStroke> keys, Lang currentLayout, bool followsPeriod = false) =>
         Evaluate(keys, currentLayout, followsPeriod, _context, record: true);
 
+    /// <summary>
+    /// Like <see cref="Decide(CompletedWord)"/>, with the same context, but without recording the
+    /// word in it: for a replacement that is only offered (suggest-only apps) and may be ignored.
+    /// </summary>
+    public Decision Peek(CompletedWord word) =>
+        word.Tainted ? new Keep(KeepReason.PartialWord)
+        : word.MixedLayout ? new Keep(KeepReason.MixedLayout)
+        : Evaluate(word.Keys, word.Layout, word.FollowsPeriod, _context, record: false);
+
+    /// <summary>A word now shows in <paramref name="lang"/> (an offered replacement was accepted).</summary>
+    public void RecordContext(Lang lang) => _context.Record(lang, _options.ContextWindow);
+
     private Decision Evaluate(IReadOnlyList<KeyStroke> keys, Lang currentLayout, bool followsPeriod, ContextTracker context, bool record)
     {
         var options = _options;

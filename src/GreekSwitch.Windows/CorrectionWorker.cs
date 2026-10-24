@@ -119,6 +119,7 @@ public sealed class CorrectionWorker
                 if (!_monitor.CaptureKeys || !_session.AcceptSuggestion())
                 {
                     PassTabOn();
+                    _session.Reset(); // the session never sees our own Tab: it ends the word all the same
                 }
 
                 break;
@@ -162,6 +163,14 @@ public sealed class CorrectionWorker
 
     private void PassTabOn()
     {
+        // Never Tab into a terminal or IDE (suggestions aren't shown there, so this is a last guard).
+        var (_, focus) = KeyboardLayouts.ForegroundLayout();
+        if (CommandWindows.IsCommandWindow(focus))
+        {
+            _logger.LogInformation("Swallowed Tab not passed on: terminal or IDE");
+            return;
+        }
+
         var tab = InputBuilder.Chord([VirtualKeys.Tab]);
         if (_sender.Send(tab) != tab.Length)
         {

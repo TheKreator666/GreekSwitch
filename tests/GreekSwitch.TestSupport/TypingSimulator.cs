@@ -223,8 +223,16 @@ public sealed class TypingSimulator : ICorrectionOutput, ISuggestionSink
         return this;
     }
 
+    /// <summary>Make every Replace fail, as the Corrector does when a guard trips.</summary>
+    public bool RefuseReplacements { get; set; }
+
     public bool Replace(string before, string after, Lang layout)
     {
+        if (RefuseReplacements)
+        {
+            return false;
+        }
+
         _committed.Append(_decoder.Decode(_pending, ActiveLayout));
         _pending.Clear();
 

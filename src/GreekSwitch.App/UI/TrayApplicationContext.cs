@@ -131,9 +131,15 @@ internal sealed class TrayApplicationContext : ApplicationContext
             var host = _host = await GreekSwitchHost.StartAsync(_settings, _managed, _policy, _neverConvert, _alwaysConvert, _loanwordPairs, _logger).ConfigureAwait(true);
             host.HealthChanged += (_, _) => _ui.Post(_ => UpdateUi(), null);
             host.Corrected += (_, _) => _ui.Post(_ => Flash(), null);
-            host.SuggestionShown += (_, e) => _ui.Post(_ => _popup.ShowSuggestion(e.Text, e.X, e.Y), null);
+            host.SuggestionShown += (_, e) => _ui.Post(
+                _ =>
+                {
+                    _popup.ShowSuggestion(e.Id, e.Text, e.X, e.Y);
+                    host.SuggestionOpened(e.Id); // Tab accepts only what the user can see
+                },
+                null);
             host.SuggestionHidden += (_, _) => _ui.Post(_ => _popup.HideSuggestion(), null);
-            _popup.Expired += (_, _) => host.SuggestionExpired();
+            _popup.Expired += (_, id) => host.SuggestionExpired(id);
             _sessionEvents = new SessionEventsWindow(change => _host?.NotifySessionChange(change));
             _selection = new SelectionConverter(
                 new WinFormsClipboard(),

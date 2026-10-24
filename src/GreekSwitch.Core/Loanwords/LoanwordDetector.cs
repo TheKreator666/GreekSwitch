@@ -85,16 +85,24 @@ public sealed class LoanwordDetector : ILoanwordDetector
     {
         var matcher = _matcher;
         var options = _options;
+
+        // Pairs the user typed into Settings apply whatever the word's length or spelling ("ΔΕΗ = DEH").
+        var pair = _pairs.Find(greekWord);
+        if (pair is { Explicit: true } typedPair)
+        {
+            _logger.LogDebug("Loanword match, tier {Tier}, user pair, length {Length}", (int)LoanwordTier.UserPair, greekWord.Length);
+            return new LoanwordReplace(MatchCase(greekWord, typedPair.Target), LoanwordTier.UserPair);
+        }
+
         if (matcher is null || greekWord.Count(char.IsLetter) < options.MinLetters
             || GreekPhonetics.Transcribe(greekWord) is not { } phonetic)
         {
             return LoanwordResult.None;
         }
 
-        var pair = _pairs.Find(greekWord);
-        if (pair is { } p && (p.Explicit || p.Accepts >= options.PromoteAfterAccepts))
+        if (pair is { } p && p.Accepts >= options.PromoteAfterAccepts)
         {
-            _logger.LogInformation("Loanword replaced, tier {Tier}, {Source}, length {Length}", (int)LoanwordTier.UserPair, p.Explicit ? "user pair" : "promoted", greekWord.Length);
+            _logger.LogDebug("Loanword match, tier {Tier}, promoted, length {Length}", (int)LoanwordTier.UserPair, greekWord.Length);
             return new LoanwordReplace(MatchCase(greekWord, p.Target), LoanwordTier.UserPair);
         }
 
@@ -130,7 +138,7 @@ public sealed class LoanwordDetector : ILoanwordDetector
         if (options.AutoReplaceStrongMatches && best.Score >= options.StrongThreshold
             && _vocabulary.Contains(best.Word) && !inDictionary)
         {
-            _logger.LogInformation("Loanword replaced, tier {Tier}, score {Score}, length {Length}", (int)LoanwordTier.StrongMatch, Bucket(best.Score), greekWord.Length);
+            _logger.LogDebug("Loanword match, tier {Tier}, score {Score}, length {Length}", (int)LoanwordTier.StrongMatch, Bucket(best.Score), greekWord.Length);
             return new LoanwordReplace(MatchCase(greekWord, best.Word), LoanwordTier.StrongMatch);
         }
 

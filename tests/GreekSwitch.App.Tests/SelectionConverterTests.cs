@@ -47,6 +47,19 @@ public sealed class SelectionConverterTests
     }
 
     [Fact]
+    public async Task Does_nothing_when_the_clipboard_content_cannot_be_saved()
+    {
+        _app.Selection = "kalhm;era";
+        _app.Clipboard.Contents = "an Excel range";
+        _app.Clipboard.Unreadable = true;
+
+        (await Converter().ConvertAsync()).Should().BeFalse();
+
+        _app.KeysSent.Should().Be(0, "Ctrl+C would overwrite what can't be put back");
+        _app.Clipboard.Contents.Should().Be("an Excel range");
+    }
+
+    [Fact]
     public async Task Without_a_selection_nothing_is_pasted_and_the_clipboard_is_untouched()
     {
         _app.Selection = null;
@@ -140,7 +153,13 @@ public sealed class SelectionConverterTests
 
         public bool RestoredPrivately { get; private set; }
 
-        public object? Backup() => Contents is null ? null : new Box(Contents);
+        public bool Unreadable { get; set; }
+
+        public bool TryBackup(out object? backup)
+        {
+            backup = Contents is null ? null : new Box(Contents);
+            return !Unreadable;
+        }
 
         public void Restore(object? backup)
         {

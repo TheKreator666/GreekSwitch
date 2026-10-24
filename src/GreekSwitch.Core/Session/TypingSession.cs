@@ -64,6 +64,9 @@ public sealed class TypingSession
         set => _options = value;
     }
 
+    /// <summary>Raised after a correction was typed: replacement, loanword, accepted suggestion, hotkey. Not for an undo.</summary>
+    public event EventHandler? Corrected;
+
     /// <summary>
     /// The focused app is in suggest-only mode: layout corrections are offered as suggestions
     /// (needs a suggestion sink) instead of being made. Set by the worker on focus changes.
@@ -202,6 +205,7 @@ public sealed class TypingSession
 
         _logger.LogInformation("Last word converted by hotkey, lang {From}→{To}, length {Length}", shown.Code(), target.Code(), converted.Length);
         Array.Clear(keys);
+        Corrected?.Invoke(this, EventArgs.Empty);
         return true;
     }
 
@@ -229,10 +233,15 @@ public sealed class TypingSession
         {
             _loanwords?.Accept(pending.Undo.Original, target);
         }
+        else if (pending.Undo.LoanwordTarget is null)
+        {
+            _engine.RecordContext(pending.Layout); // only counted once the user took it
+        }
 
         _run.Clear();
         ClearLast();
         _undo.Arm(pending.Undo);
+        Corrected?.Invoke(this, EventArgs.Empty);
         _logger.LogInformation(
             "Suggestion accepted, kind {Kind}, length {Length}",
             pending.Undo.LoanwordTarget is null ? "layout" : "loanword",
@@ -264,10 +273,18 @@ public sealed class TypingSession
 
         var skipLoanword = _skipLoanwordOnce;
         _skipLoanwordOnce = false;
-        var decision = _engine.Decide(word);
+        // In a suggest-only app a replacement is only offered and may be ignored: judge it without
+        // recording the context, and record a kept word as usual.
+        var offerOnly = _suggestOnly && _suggestions is not null;
+        var decision = offerOnly ? _engine.Peek(word) : _engine.Decide(word);
+        if (offerOnly && decision is Keep)
+        {
+            decision = _engine.Decide(word);
+        }
+
         if (decision is Replace replace)
         {
-            if (_suggestOnly && _suggestions is not null)
+            if (offerOnly)
             {
                 SuggestLayout(word, replace, delimiter);
             }
@@ -324,7 +341,13 @@ public sealed class TypingSession
             return; // punctuation or a stray accent mark (tonos before a consonant) inside the word: leave it alone
         }
 
-        switch (_loanwords.Check(shown))
+        var result = _loanwords.Check(shown);
+        if (result is LoanwordReplace offered && _suggestOnly && _suggestions is not null)
+        {
+            result = new LoanwordSuggest(offered.Target, 1); // suggest-only: offered, never made
+        }
+
+        switch (result)
         {
             case LoanwordReplace replace:
                 var undo = new UndoRecord(shown, replace.Target, word.Keys, Lang.Greek, Words: [], LoanwordTarget: replace.Target);
@@ -340,6 +363,7 @@ public sealed class TypingSession
                 ClearLast();
                 _undo.Arm(undo);
                 _logger.LogInformation("Loanword replaced, tier {Tier}, length {Length}", (int)replace.Tier, replace.Target.Length);
+                Corrected?.Invoke(this, EventArgs.Empty);
                 break;
             case LoanwordSuggest suggest when _suggestions is not null:
                 Offer(new PendingSuggestion(
@@ -448,6 +472,7 @@ public sealed class TypingSession
             _logger.LogDebug("[debug text] {Original} → {Text}", original, replacement);
         }
 #endif
+        Corrected?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
