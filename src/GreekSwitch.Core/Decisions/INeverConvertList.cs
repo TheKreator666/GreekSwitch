@@ -12,7 +12,8 @@ public interface INeverConvertList
     /// A word learned from an undo. It may be anything the user typed, including a password in a
     /// box we couldn't recognise as one, so it is kept only as a keyed hash and never as text.
     /// </summary>
-    void Learn(string word);
+    /// <returns>True if the word is on the list now; false if learning is off (IT policy) or the word is empty.</returns>
+    bool Learn(string word);
 
     /// <summary>Forgets a word learned with <see cref="Learn"/> (e.g. the user undid the action that taught it).</summary>
     void Forget(string word);

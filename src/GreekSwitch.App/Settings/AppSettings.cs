@@ -1,3 +1,5 @@
+using GreekSwitch.Core.Loanwords;
+
 namespace GreekSwitch.App.Settings;
 
 /// <summary>Contents of %APPDATA%\GreekSwitch\settings.json.</summary>
@@ -80,6 +82,21 @@ internal sealed class AppSettings
     /// The policy value DisableLoanwordSuggestions forces it off.
     /// </summary>
     public bool SuggestLoanwords { get; set; } = true;
+
+    /// <summary>Tier 2: replace strong matches on non-dictionary Greek words with tech terms automatically (ντεπλόι → deploy). Off by default.</summary>
+    public bool AutoReplaceLoanwords { get; set; }
+
+    /// <summary>Loanword pairs the user typed into Settings (readable, editable): always replaced.</summary>
+    public List<LoanwordPair> LoanwordPairs { get; set; } = [];
+
+    /// <summary>
+    /// Pairs learned from accepted and undone suggestions: an HMAC hash of the Greek word (same key
+    /// as above), the English dictionary target, and accept/reject counts. Never the Greek word.
+    /// </summary>
+    public List<LearnedLoanword> LoanwordLearned { get; set; } = [];
+
+    /// <summary>Executables where corrections are only suggested (Tab accepts), never made automatically.</summary>
+    public List<string> SuggestOnlyProcesses { get; set; } = [];
 
     /// <summary>The first-run dialog has been shown.</summary>
     public bool FirstRunCompleted { get; set; }

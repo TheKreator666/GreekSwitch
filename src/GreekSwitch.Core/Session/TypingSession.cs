@@ -1,5 +1,6 @@
 using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Input;
+using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
 using Microsoft.Extensions.Logging;
 
@@ -9,6 +10,9 @@ namespace GreekSwitch.Core.Session;
 /// The per-keystroke pipeline: buffer keys, decide at each word boundary, send corrections, and
 /// undo a correction when the very next key is Backspace. After a confident correction, the
 /// last few words of the run are judged again with the new context and fixed in the same batch.
+/// Kept Greek words are then checked for English loanwords (κοντέινερ → container), which are
+/// replaced (user pairs, strong matches) or suggested (Tab accepts). In suggest-only apps, layout
+/// corrections are suggested instead of made. A suggestion lives only until the next key.
 /// Single-threaded: call it only from the worker. Log events carry languages, lengths, counts
 /// and reasons, never text.
 /// </summary>
@@ -23,8 +27,13 @@ public sealed class TypingSession
     private readonly WordBuffer _buffer = new();
     private readonly RecentRun _run = new();
     private readonly UndoTracker _undo = new();
+    private readonly ILoanwordDetector? _loanwords;
+    private readonly ISuggestionSink? _suggestions;
     private volatile SessionOptions _options;
+    private volatile bool _suggestOnly;
     private LastWord? _last;
+    private PendingSuggestion? _pending;
+    private bool _skipLoanwordOnce;
 
     public TypingSession(
         DecisionEngine engine,
@@ -33,9 +42,13 @@ public sealed class TypingSession
         INeverConvertList neverConvert,
         ILogger logger,
         SessionOptions? options = null,
-        INeverConvertList? alwaysConvert = null)
+        INeverConvertList? alwaysConvert = null,
+        ILoanwordDetector? loanwords = null,
+        ISuggestionSink? suggestions = null)
     {
         _alwaysConvert = alwaysConvert ?? new NeverConvertList();
+        _loanwords = loanwords;
+        _suggestions = suggestions;
         _engine = engine;
         _classifier = classifier;
         _output = output;
@@ -50,11 +63,25 @@ public sealed class TypingSession
         set => _options = value;
     }
 
+    /// <summary>
+    /// The focused app is in suggest-only mode: layout corrections are offered as suggestions
+    /// (needs a suggestion sink) instead of being made. Set by the worker on focus changes.
+    /// </summary>
+    public bool SuggestOnly
+    {
+        get => _suggestOnly;
+        set => _suggestOnly = value;
+    }
+
     /// <summary>Number of keys in the current word (for diagnostics and tests).</summary>
     public int BufferedKeyCount => _buffer.Count;
 
+    /// <summary>A suggestion is waiting for Tab (for tests).</summary>
+    public bool HasSuggestion => _pending is not null;
+
     public void OnKey(KeyInput key, Lang activeLayout)
     {
+        ClearSuggestion(); // any key dismisses a suggestion (the hook already let it through)
         var classification = _classifier.Classify(key);
         if (classification.Action == KeyAction.Ignore
             || (classification.Action == KeyAction.Reset && _options.HotkeyChords.Any(c => c.Matches(key))))
@@ -97,6 +124,7 @@ public sealed class TypingSession
     /// </summary>
     public void MarkPartial()
     {
+        ClearSuggestion();
         _buffer.MarkTainted();
         _run.Clear();
         ClearLast();
@@ -112,6 +140,7 @@ public sealed class TypingSession
     /// <returns>False if there was nothing to convert or the conversion couldn't be applied.</returns>
     public bool ConvertLastWord()
     {
+        ClearSuggestion();
         KeyStroke[] keys;
         Lang typed, shown;
         string delimiter;
@@ -175,9 +204,46 @@ public sealed class TypingSession
         return true;
     }
 
+    /// <summary>
+    /// Tab while a suggestion was visible (the hook swallowed it): type the suggestion, with the
+    /// usual guards, and arm undo. An accepted loanword counts towards making the pair automatic.
+    /// </summary>
+    /// <returns>False if there was nothing to accept or it couldn't be typed: the caller should then pass the Tab on.</returns>
+    public bool AcceptSuggestion()
+    {
+        if (_pending is not { } pending)
+        {
+            return false;
+        }
+
+        _pending = null;
+        _suggestions?.Hide();
+        if (!_output.Replace(pending.Before, pending.After, pending.Layout))
+        {
+            _logger.LogInformation("Suggestion not applied, kind {Kind}", pending.Undo.LoanwordTarget is null ? "layout" : "loanword");
+            return false;
+        }
+
+        if (pending.Undo.LoanwordTarget is { } target && _options.LearnLoanwords)
+        {
+            _loanwords?.Accept(pending.Undo.Original, target);
+        }
+
+        _run.Clear();
+        ClearLast();
+        _undo.Arm(pending.Undo);
+        _logger.LogInformation(
+            "Suggestion accepted, kind {Kind}, length {Length}",
+            pending.Undo.LoanwordTarget is null ? "layout" : "loanword",
+            pending.Undo.Replacement.Length);
+        return true;
+    }
+
     /// <summary>A boundary the Windows layer saw: mouse click, focus change, caret keys and so on.</summary>
     public void Reset()
     {
+        ClearSuggestion();
+        _skipLoanwordOnce = false;
         _buffer.Reset();
         _run.Clear();
         ClearLast();
@@ -195,10 +261,19 @@ public sealed class TypingSession
             return;
         }
 
+        var skipLoanword = _skipLoanwordOnce;
+        _skipLoanwordOnce = false;
         var decision = _engine.Decide(word);
         if (decision is Replace replace)
         {
-            ApplyReplacement(word, replace, delimiter);
+            if (_suggestOnly && _suggestions is not null)
+            {
+                SuggestLayout(word, replace, delimiter);
+            }
+            else
+            {
+                ApplyReplacement(word, replace, delimiter);
+            }
         }
         else
         {
@@ -216,6 +291,10 @@ public sealed class TypingSession
             if (!word.Tainted && !word.MixedLayout)
             {
                 SetLast(word.Keys, word.Layout, word.Layout, delimiter.Text);
+                if (!skipLoanword)
+                {
+                    CheckLoanword(word, delimiter);
+                }
             }
             else
             {
@@ -226,6 +305,85 @@ public sealed class TypingSession
         if (delimiter.Kind != DelimiterKind.Space)
         {
             _run.Clear(); // punctuation ends the run
+        }
+    }
+
+    /// <summary>A kept Greek word that may be an English word in Greek letters: replace it (tiers 1–2) or suggest it.</summary>
+    private void CheckLoanword(CompletedWord word, Delimiter delimiter)
+    {
+        if (_loanwords is null || !_options.SuggestLoanwords || word.Layout != Lang.Greek
+            || delimiter.Kind is not (DelimiterKind.Space or DelimiterKind.Punctuation))
+        {
+            return;
+        }
+
+        var shown = _engine.Display(word.Keys, word.Layout, word.Layout);
+        if (Scorer.LexicalCore(shown) != shown)
+        {
+            return; // punctuation inside the word's keys ("απ'"): leave it alone
+        }
+
+        switch (_loanwords.Check(shown))
+        {
+            case LoanwordReplace replace:
+                var undo = new UndoRecord(shown, replace.Target, word.Keys, Lang.Greek, Words: [], LoanwordTarget: replace.Target);
+
+                // The Greek layout stays: the user is writing Greek. Latin letters go out as Unicode.
+                if (!_output.Replace(shown + delimiter.Text, replace.Target + delimiter.Text, Lang.Greek))
+                {
+                    _logger.LogInformation("Loanword replacement not applied, tier {Tier}", (int)replace.Tier);
+                    return;
+                }
+
+                _run.Clear();
+                ClearLast();
+                _undo.Arm(undo);
+                _logger.LogInformation("Loanword replaced, tier {Tier}, length {Length}", (int)replace.Tier, replace.Target.Length);
+                break;
+            case LoanwordSuggest suggest when _suggestions is not null:
+                Offer(new PendingSuggestion(
+                    shown + delimiter.Text,
+                    suggest.Target + delimiter.Text,
+                    Lang.Greek,
+                    new UndoRecord(shown, suggest.Target, word.Keys, Lang.Greek, Words: [], LoanwordTarget: suggest.Target)));
+                break;
+        }
+    }
+
+    /// <summary>Suggest-only app: offer the layout correction instead of making it (no earlier words).</summary>
+    private void SuggestLayout(CompletedWord word, Replace replace, Delimiter delimiter)
+    {
+        _run.Clear();
+        SetLast(word.Keys, word.Layout, word.Layout, delimiter.Text);
+        if (replace.TurnOffCapsLock)
+        {
+            return; // an accidental-Caps-Lock fix also turns Caps Lock off: not something to offer
+        }
+
+        Offer(new PendingSuggestion(
+            replace.Original + delimiter.Text,
+            replace.Text + delimiter.Text,
+            replace.TargetLayout,
+            new UndoRecord(replace.Original, replace.Text, word.Keys, replace.SourceLayout)));
+    }
+
+    private void Offer(PendingSuggestion suggestion)
+    {
+        _pending = suggestion;
+        var text = suggestion.Undo.Replacement;
+        _suggestions!.Show(text);
+        _logger.LogInformation(
+            "Suggestion shown, kind {Kind}, length {Length}",
+            suggestion.Undo.LoanwordTarget is null ? "layout" : "loanword",
+            text.Length);
+    }
+
+    private void ClearSuggestion()
+    {
+        if (_pending is not null)
+        {
+            _pending = null;
+            _suggestions?.Hide();
         }
     }
 
@@ -338,11 +496,23 @@ public sealed class TypingSession
             (undo.TaughtAlways ? _alwaysConvert : _neverConvert).Forget(taught); // the user took it back
         }
 
-        // A hotkey conversion has Words = []: undoing it only takes back what it taught.
-        IReadOnlyList<string> learned = undo.Words ?? [Scorer.LexicalCore(undo.Original)];
-        foreach (var word in learned)
+        if (undo.LoanwordTarget is { } target)
         {
-            _neverConvert.Learn(word);
+            // Not a layout mistake: nothing goes on the never-convert list, the pair is rejected,
+            // and the restored word isn't offered again when it's completed.
+            if (_options.LearnLoanwords)
+            {
+                _loanwords?.Reject(undo.Original, target);
+            }
+
+            _skipLoanwordOnce = true;
+        }
+
+        // A hotkey conversion or a loanword has Words = []: undoing it only takes back what it taught.
+        var learned = 0;
+        foreach (var word in undo.Words ?? [Scorer.LexicalCore(undo.Original)])
+        {
+            learned += _neverConvert.Learn(word) ? 1 : 0;
         }
 
         _buffer.Restore(undo.Keys, undo.OriginalLayout);
@@ -351,7 +521,7 @@ public sealed class TypingSession
             "Replacement reverted by Backspace, lang back to {Lang}, length {Length}, words added to never-convert list {Learned}",
             undo.OriginalLayout.Code(),
             undo.Original.Length,
-            learned.Count);
+            learned);
     }
 
     private void SetLast(IReadOnlyList<KeyStroke> keys, Lang typed, Lang shown, string delimiter)
@@ -371,4 +541,10 @@ public sealed class TypingSession
 
     /// <summary>The last completed word: its keys, the layout they were typed in, what it shows now, and its delimiter.</summary>
     private sealed record LastWord(KeyStroke[] Keys, Lang Typed, Lang Shown, string Delimiter);
+
+    /// <summary>
+    /// A suggestion on screen: what to replace (word + delimiter, already typed), with what, in
+    /// which layout, and the undo record to arm once accepted. Dropped at the next key.
+    /// </summary>
+    private sealed record PendingSuggestion(string Before, string After, Lang Layout, UndoRecord Undo);
 }

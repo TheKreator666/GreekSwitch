@@ -79,12 +79,12 @@ public sealed class NeverConvertList : INeverConvertList
         }
     }
 
-    public void Learn(string word)
+    public bool Learn(string word)
     {
         var key = Key(word);
         if (key.Length == 0 || !_learningEnabled)
         {
-            return;
+            return false;
         }
 
         var hash = _hasher.Hash(key);
@@ -98,6 +98,8 @@ public sealed class NeverConvertList : INeverConvertList
         {
             Changed?.Invoke(this, EventArgs.Empty);
         }
+
+        return true;
     }
 
     public void Forget(string word)

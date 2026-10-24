@@ -1,3 +1,4 @@
+using GreekSwitch.Core.Loanwords;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -134,6 +135,9 @@ internal sealed class SettingsStore
         s.NeverConvert = [.. (s.NeverConvert ?? []).Where(w => !string.IsNullOrWhiteSpace(w)).Select(w => w.Trim())];
         s.NeverConvertLearned ??= [];
         s.AlwaysConvertLearned ??= [];
+        s.LoanwordPairs = [.. (s.LoanwordPairs ?? []).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Greek) && !string.IsNullOrWhiteSpace(p.Target))];
+        s.LoanwordLearned = [.. (s.LoanwordLearned ?? []).Where(p => p is not null && !string.IsNullOrEmpty(p.Hash) && LoanwordPairStore.IsValidLearnedTarget(p.Target ?? ""))];
+        s.SuggestOnlyProcesses = [.. (s.SuggestOnlyProcesses ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim())];
         return s;
     }
 }

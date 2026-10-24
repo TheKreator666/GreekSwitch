@@ -3,6 +3,7 @@ using GreekSwitch.Core;
 using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Input;
 using GreekSwitch.Core.Layout;
+using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
 using GreekSwitch.Core.Session;
 
@@ -13,7 +14,7 @@ namespace GreekSwitch.TestSupport;
 /// and then the session, as in the real app where the hook passes keys straight through.
 /// Corrections from the session edit the screen and may switch the active layout.
 /// </summary>
-public sealed class TypingSimulator : ICorrectionOutput
+public sealed class TypingSimulator : ICorrectionOutput, ISuggestionSink
 {
     /// <summary>Characters the simulator types as word boundaries (the classifier's delimiters plus whitespace).</summary>
     public const string DelimiterChars = " .,!?()[]{}\"-\n\t";
@@ -35,7 +36,8 @@ public sealed class TypingSimulator : ICorrectionOutput
         bool followLayoutSwitches = true,
         ScoringOptions? scoring = null,
         SessionOptions? session = null,
-        IEnumerable<string>? neverConvert = null)
+        IEnumerable<string>? neverConvert = null,
+        ILoanwordDetector? loanwords = null)
     {
         _followLayoutSwitches = followLayoutSwitches;
         NeverConvert = new NeverConvertList(neverConvert);
@@ -49,7 +51,40 @@ public sealed class TypingSimulator : ICorrectionOutput
             NeverConvert,
             Logger,
             session,
-            AlwaysConvert);
+            AlwaysConvert,
+            loanwords,
+            this);
+    }
+
+    /// <summary>The suggestion on show (as the popup would show it), or null.</summary>
+    public string? Suggestion { get; private set; }
+
+    /// <summary>Every suggestion shown so far.</summary>
+    public List<string> SuggestionsShown { get; } = [];
+
+    void ISuggestionSink.Show(string text)
+    {
+        Suggestion = text;
+        SuggestionsShown.Add(text);
+    }
+
+    void ISuggestionSink.Hide() => Suggestion = null;
+
+    /// <summary>Tab as the real hook handles it: swallowed to accept a visible suggestion, otherwise typed.</summary>
+    public TypingSimulator Tab()
+    {
+        if (Suggestion is null)
+        {
+            return Press(new KeyInput(VirtualKeys.Tab));
+        }
+
+        Suggestion = null;
+        if (!Session.AcceptSuggestion())
+        {
+            Press(new KeyInput(VirtualKeys.Tab)); // the worker passes the Tab on
+        }
+
+        return this;
     }
 
     public TypingSession Session { get; }

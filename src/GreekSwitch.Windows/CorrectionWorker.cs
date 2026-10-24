@@ -1,8 +1,10 @@
 using GreekSwitch.Core.Decisions;
+using GreekSwitch.Core.Layout;
 using GreekSwitch.Core.Session;
 using GreekSwitch.Windows.Focus;
 using GreekSwitch.Windows.Hooks;
 using GreekSwitch.Windows.Layouts;
+using GreekSwitch.Windows.Output;
 using Microsoft.Extensions.Logging;
 using static GreekSwitch.Windows.Native.NativeMethods;
 
@@ -29,6 +31,7 @@ public sealed class CorrectionWorker
     private readonly ILogger _logger;
     private readonly UiaThread _uia;
     private readonly PasswordGate _gate = new();
+    private readonly IInputSender _sender;
     private bool _excluded;
     private long _droppedWhenCaptureStopped;
 
@@ -40,8 +43,10 @@ public sealed class CorrectionWorker
         IPasswordFieldDetector passwords,
         ICorrectionPolicy policy,
         UiaThread uia,
-        ILogger logger)
+        ILogger logger,
+        IInputSender? sender = null)
     {
+        _sender = sender ?? new Win32InputSender();
         _uia = uia;
         _monitor = monitor;
         _session = session;
@@ -82,9 +87,11 @@ public sealed class CorrectionWorker
                 _session.Reset();
                 break;
             case InputEventKind.ForegroundChanged:
+                LogFocusEvent(input);
                 OnForegroundChanged(input.Window);
                 break;
             case InputEventKind.FocusChanged:
+                LogFocusEvent(input);
                 OnFocusChanged(new FocusKey(input.Window, input.ChildId));
                 break;
             case InputEventKind.PolicyChanged:
@@ -103,6 +110,15 @@ public sealed class CorrectionWorker
                 if (_monitor.CaptureKeys)
                 {
                     _session.ConvertLastWord();
+                }
+
+                break;
+            case InputEventKind.AcceptSuggestion:
+                // The hook swallowed a Tab for a suggestion that may have gone meanwhile (a key or
+                // focus change raced it): then give the user their Tab back.
+                if (!_monitor.CaptureKeys || !_session.AcceptSuggestion())
+                {
+                    PassTabOn();
                 }
 
                 break;
@@ -134,12 +150,32 @@ public sealed class CorrectionWorker
         _session.OnKey(input.Key, layout);
     }
 
+    /// <summary>Diagnostics for focus churn: the event kind and whether the window is our own (never which app).</summary>
+    private void LogFocusEvent(InputEvent input)
+    {
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            GetWindowThreadProcessId(input.Window, out var pid);
+            _logger.LogDebug("{Kind} event, own window {Own}", input.Kind, pid == Environment.ProcessId);
+        }
+    }
+
+    private void PassTabOn()
+    {
+        var tab = InputBuilder.Chord([VirtualKeys.Tab]);
+        if (_sender.Send(tab) != tab.Length)
+        {
+            _logger.LogWarning("Swallowed Tab could not be passed on");
+        }
+    }
+
     private void OnForegroundChanged(nint window)
     {
         _session.Reset();
         _engine.ClearContext();
         var process = ProcessNames.FromWindow(window);
         _excluded = process is not null && _policy.IsExcluded(process);
+        _session.SuggestOnly = process is not null && _policy.IsSuggestOnly(process);
         var focus = KeyboardLayouts.ForegroundLayout().FocusWindow;
         Refocus(new FocusKey(focus != 0 ? focus : window, 0));
     }
@@ -149,6 +185,7 @@ public sealed class CorrectionWorker
         _session.Reset();
         var process = ProcessNames.FromWindow(GetForegroundWindow());
         _excluded = process is not null && _policy.IsExcluded(process);
+        _session.SuggestOnly = process is not null && _policy.IsSuggestOnly(process);
         Refocus(key);
     }
 

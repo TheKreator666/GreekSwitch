@@ -21,7 +21,8 @@ public sealed record UndoRecord(
     IReadOnlyList<string>? Words = null,
     bool ByHotkey = false,
     string? Taught = null,
-    bool TaughtAlways = false);
+    bool TaughtAlways = false,
+    string? LoanwordTarget = null);
 
 /// <summary>
 /// Remembers the last replacement until the next key. A Backspace as that next key takes the

@@ -2,6 +2,7 @@ using GreekSwitch.App.Policy;
 using GreekSwitch.App.Settings;
 using GreekSwitch.Core;
 using GreekSwitch.Core.Decisions;
+using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Windows.Focus;
 using GreekSwitch.Windows.Layouts;
 using GreekSwitch.Windows.Output;
@@ -21,6 +22,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly IPolicyRegistry _registry;
     private readonly NeverConvertList _neverConvert;
     private readonly NeverConvertList _alwaysConvert;
+    private readonly LoanwordPairStore _loanwordPairs;
+    private readonly SuggestionPopup _popup = new();
     private readonly SynchronizationContext _ui;
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _enabledItem;
@@ -50,6 +53,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         var hasher = new HmacWordHasher(key);
         _neverConvert = new NeverConvertList(_settings.NeverConvert, _settings.NeverConvertLearned, hasher);
         _alwaysConvert = new NeverConvertList(learned: _settings.AlwaysConvertLearned, hasher: hasher);
+        _loanwordPairs = new LoanwordPairStore(_settings.LoanwordPairs, _settings.LoanwordLearned, hasher);
         System.Security.Cryptography.CryptographicOperations.ZeroMemory(key); // the hasher keeps its own copy
         if (keyCreated)
         {
@@ -59,6 +63,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         RefreshPolicy(); // before the hooks start, so GreekSwitch disabled by policy never captures
         _neverConvert.Changed += (_, _) => _ui.Post(_ => SaveLearned(), null);
         _alwaysConvert.Changed += (_, _) => _ui.Post(_ => SaveLearned(), null);
+        _loanwordPairs.Changed += (_, _) => _ui.Post(_ => SaveLearned(), null);
 
         _enabledItem = new ToolStripMenuItem("&Enabled", null, (_, _) => ToggleEnabled()) { Checked = _managed.EffectiveEnabled(_settings) };
         _pauseItem = new ToolStripMenuItem("&Pause for 5 min", null, (_, _) => TogglePause());
@@ -108,6 +113,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _flashTimer.Dispose();
             _hotkeys?.Dispose();
             _flashIcon.Dispose();
+            _popup.Dispose();
             _activeIcon.Dispose();
             _inactiveIcon.Dispose();
             _errorIcon.Dispose();
@@ -122,9 +128,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            var host = _host = await GreekSwitchHost.StartAsync(_settings, _policy, _neverConvert, _alwaysConvert, _logger).ConfigureAwait(true);
+            var host = _host = await GreekSwitchHost.StartAsync(_settings, _managed, _policy, _neverConvert, _alwaysConvert, _loanwordPairs, _logger).ConfigureAwait(true);
             host.HealthChanged += (_, _) => _ui.Post(_ => UpdateUi(), null);
             host.Corrected += (_, _) => _ui.Post(_ => Flash(), null);
+            host.SuggestionShown += (_, e) => _ui.Post(_ => _popup.ShowSuggestion(e.Text, e.X, e.Y), null);
+            host.SuggestionHidden += (_, _) => _ui.Post(_ => _popup.HideSuggestion(), null);
+            _popup.Expired += (_, _) => host.SuggestionExpired();
             _sessionEvents = new SessionEventsWindow(change => _host?.NotifySessionChange(change));
             _selection = new SelectionConverter(
                 new WinFormsClipboard(),
@@ -274,7 +283,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         RefreshPolicy();
         UpdateUi();
         SyncLearned();
-        var learned = _settings.NeverConvertLearned.Count + _settings.AlwaysConvertLearned.Count;
+        var learned = _settings.NeverConvertLearned.Count + _settings.AlwaysConvertLearned.Count + _settings.LoanwordLearned.Count;
         using var form = _settingsForm = new SettingsForm(_settings, _managed, StartupRegistration.IsEnabled(), learned, _hotkeys?.Unavailable ?? []);
         if (form.ShowDialog() != DialogResult.OK)
         {
@@ -283,12 +292,15 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _settings = form.Result;
         _neverConvert.ReplaceAll(_settings.NeverConvert);
+        _loanwordPairs.ReplaceAll(_settings.LoanwordPairs);
         if (form.ForgetLearnedWords)
         {
             _neverConvert.ForgetLearned();
             _alwaysConvert.ForgetLearned();
+            _loanwordPairs.ForgetLearned();
             _settings.NeverConvertLearned = [];
             _settings.AlwaysConvertLearned = [];
+            _settings.LoanwordLearned = [];
         }
 
         _policy.Apply(_settings, _managed);
@@ -298,7 +310,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             StartupRegistration.Set(form.StartWithWindows);
         }
 
-        _host?.Apply(_settings);
+        _host?.Apply(_settings, _managed);
         _hotkeys?.Register(_settings);
         UpdateUi();
     }
@@ -319,7 +331,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _policy.Apply(_settings, _managed);
         _neverConvert.LearningEnabled = !_managed.DisableUndoLearning;
         _alwaysConvert.LearningEnabled = !_managed.DisableUndoLearning;
-        _host?.NotifyPolicyChanged();
+        _host?.Apply(_settings, _managed); // loanword suggestions and learning follow the policy too
     }
 
     private void SaveLearned()
@@ -333,6 +345,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _settings.NeverConvert = [.. _neverConvert.Snapshot()];
         _settings.NeverConvertLearned = [.. _neverConvert.LearnedSnapshot()];
         _settings.AlwaysConvertLearned = [.. _alwaysConvert.LearnedSnapshot()];
+        _settings.LoanwordPairs = [.. _loanwordPairs.Snapshot()];
+        _settings.LoanwordLearned = [.. _loanwordPairs.LearnedSnapshot()];
     }
 
     private void UpdateUi()

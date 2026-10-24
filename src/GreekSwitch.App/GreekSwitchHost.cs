@@ -1,8 +1,10 @@
+using GreekSwitch.App.Policy;
 using GreekSwitch.App.Settings;
 using GreekSwitch.Core;
 using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Input;
 using GreekSwitch.Core.Layout;
+using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
 using GreekSwitch.Core.Session;
 using GreekSwitch.Windows;
@@ -51,6 +53,7 @@ internal sealed class GreekSwitchHost : IDisposable
     private readonly TypingSession _session;
     private readonly CorrectionWorker _workerLoop;
     private readonly ILayoutSwitcher _layouts;
+    private readonly LoanwordDetector _loanwords;
     private readonly CancellationTokenSource _stop = new();
     private readonly ILogger _logger;
     private readonly System.Threading.Timer _watchdog;
@@ -61,8 +64,11 @@ internal sealed class GreekSwitchHost : IDisposable
     private volatile bool _sessionLocked;
     private volatile HostHealth _health = HostHealth.Healthy;
 
-    private GreekSwitchHost(InputMonitor monitor, UiaThread uia, DecisionEngine engine, TypingSession session, CorrectionWorker worker, Corrector corrector, ILayoutSwitcher layouts, TextConverter converter, ILogger logger)
+    private GreekSwitchHost(InputMonitor monitor, UiaThread uia, DecisionEngine engine, TypingSession session, CorrectionWorker worker, Corrector corrector, ILayoutSwitcher layouts, TextConverter converter, LoanwordDetector loanwords, SuggestionSink suggestions, ILogger logger)
     {
+        _loanwords = loanwords;
+        suggestions.Shown += (_, e) => SuggestionShown?.Invoke(this, e);
+        suggestions.Hidden += (_, _) => SuggestionHidden?.Invoke(this, EventArgs.Empty);
         _uia = uia;
         _monitor = monitor;
         _engine = engine;
@@ -82,6 +88,12 @@ internal sealed class GreekSwitchHost : IDisposable
     /// <summary>Raised (on the worker thread) after a correction was typed: drives the tray flash.</summary>
     public event EventHandler? Corrected;
 
+    /// <summary>Raised (on the worker thread): show the popup with this suggestion next to the caret.</summary>
+    public event EventHandler<SuggestionEventArgs>? SuggestionShown;
+
+    /// <summary>Raised (on the worker thread): hide the popup.</summary>
+    public event EventHandler? SuggestionHidden;
+
     public HostHealth Health => _health;
 
     /// <summary>
@@ -98,14 +110,22 @@ internal sealed class GreekSwitchHost : IDisposable
 
     public ILayoutSwitcher Layouts => _layouts;
 
-    public static async Task<GreekSwitchHost> StartAsync(AppSettings settings, AppPolicy policy, NeverConvertList neverConvert, NeverConvertList alwaysConvert, ILogger logger)
+    public static async Task<GreekSwitchHost> StartAsync(
+        AppSettings settings,
+        ManagedPolicy managed,
+        AppPolicy policy,
+        NeverConvertList neverConvert,
+        NeverConvertList alwaysConvert,
+        LoanwordPairStore loanwordPairs,
+        ILogger logger)
     {
         // Load the language data (and check the layouts) off the UI thread.
-        var (dictionaries, trigrams, frequencies, greek, english) = await Task.Run(() =>
+        var (dictionaries, trigrams, frequencies, phonetic, greek, english) = await Task.Run(() =>
         {
             return (LexiconDictionaryService.FromEmbeddedResources(),
                 TrigramModels.FromEmbeddedResources(),
                 WordFrequencyTable.FromEmbeddedResources(),
+                PhoneticIndex.FromEmbeddedResources(),
                 LayoutVerifier.VerifyInstalled(StaticLayouts.Greek, logger),
                 LayoutVerifier.VerifyInstalled(StaticLayouts.English, logger));
         }).ConfigureAwait(true);
@@ -135,14 +155,19 @@ internal sealed class GreekSwitchHost : IDisposable
         {
             SwitchSettle = TimeSpan.FromMilliseconds(Math.Clamp(settings.LayoutSwitchSettleMs, 0, 250)),
         };
+        var loanwords = new LoanwordDetector(loanwordPairs, dictionaries, frequencies, options: ToLoanword(settings), logger: logger);
+        loanwords.UseIndex(phonetic);
+        var suggestions = new SuggestionSink(monitor.Suggestion);
         var session = new TypingSession(
             engine,
             new KeyClassifier(greek, english),
             corrector,
             neverConvert,
             logger,
-            ToSession(settings),
-            alwaysConvert);
+            ToSession(settings, managed),
+            alwaysConvert,
+            loanwords,
+            suggestions);
 
         try
         {
@@ -157,16 +182,20 @@ internal sealed class GreekSwitchHost : IDisposable
 
         var worker = new CorrectionWorker(monitor, session, engine, layouts, new PasswordFieldDetector(), policy, uia, logger);
         logger.LogInformation("GreekSwitch started");
-        return new GreekSwitchHost(monitor, uia, engine, session, worker, corrector, layouts, new TextConverter(greek, english), logger);
+        return new GreekSwitchHost(monitor, uia, engine, session, worker, corrector, layouts, new TextConverter(greek, english), loanwords, suggestions, logger);
     }
 
     /// <summary>Applies changed settings. Safe from the UI thread: options are swapped atomically.</summary>
-    public void Apply(AppSettings settings)
+    public void Apply(AppSettings settings, ManagedPolicy managed)
     {
         _engine.Options = ToScoring(settings);
-        _session.Options = ToSession(settings);
+        _session.Options = ToSession(settings, managed);
+        _loanwords.Options = ToLoanword(settings);
         NotifyPolicyChanged();
     }
+
+    /// <summary>The popup timed out: Tab is an ordinary Tab again.</summary>
+    public void SuggestionExpired() => _monitor.Suggestion.Close();
 
     public void NotifyPolicyChanged() => _monitor.NotifyPolicyChanged();
 
@@ -226,12 +255,16 @@ internal sealed class GreekSwitchHost : IDisposable
         FixAccidentalCapsLock = s.FixAccidentalCapsLock,
     };
 
-    private static SessionOptions ToSession(AppSettings s) => new()
+    private static SessionOptions ToSession(AppSettings s, ManagedPolicy managed) => new()
     {
         CorrectOnEnterAndTab = s.CorrectOnEnterAndTab,
         HotkeyChords = [.. AppHotkeys.Parse(s).Values],
+        SuggestLoanwords = managed.EffectiveSuggestLoanwords(s),
+        LearnLoanwords = !managed.DisableUndoLearning,
         DebugLogText = s.DebugLogText,
     };
+
+    private static LoanwordOptions ToLoanword(AppSettings s) => new() { AutoReplaceStrongMatches = s.AutoReplaceLoanwords };
 
     private void StartWorker()
     {

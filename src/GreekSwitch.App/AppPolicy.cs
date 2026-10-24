@@ -12,6 +12,7 @@ internal sealed class AppPolicy : ICorrectionPolicy
 {
     private volatile bool _enabled = true;
     private volatile HashSet<string> _excluded = new(StringComparer.OrdinalIgnoreCase);
+    private volatile HashSet<string> _suggestOnly = new(StringComparer.OrdinalIgnoreCase);
     private volatile HashSet<string> _alwaysExcluded = new(AppSettings.AlwaysExcludedProcesses, StringComparer.OrdinalIgnoreCase);
     private long _pausedUntilTicks;
 
@@ -29,10 +30,13 @@ internal sealed class AppPolicy : ICorrectionPolicy
 
     public bool IsExcluded(string processName) => _excluded.Contains(processName) || _alwaysExcluded.Contains(processName);
 
+    public bool IsSuggestOnly(string processName) => _suggestOnly.Contains(processName);
+
     public void Apply(AppSettings settings, ManagedPolicy managed)
     {
         _enabled = managed.EffectiveEnabled(settings);
         _excluded = new HashSet<string>(managed.EffectiveExcluded(settings), StringComparer.OrdinalIgnoreCase);
+        _suggestOnly = new HashSet<string>(settings.SuggestOnlyProcesses, StringComparer.OrdinalIgnoreCase);
         _alwaysExcluded = new HashSet<string>(AppSettings.AlwaysExcludedProcesses.Concat(managed.AdditionalAlwaysExcluded), StringComparer.OrdinalIgnoreCase);
     }
 }

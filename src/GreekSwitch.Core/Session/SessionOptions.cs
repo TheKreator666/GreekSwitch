@@ -14,6 +14,12 @@ public sealed record SessionOptions
     /// </summary>
     public IReadOnlyList<Input.KeyChord> HotkeyChords { get; init; } = [];
 
+    /// <summary>Check kept Greek words for English loanwords (κοντέινερ → container). Needs a detector and a suggestion sink.</summary>
+    public bool SuggestLoanwords { get; init; }
+
+    /// <summary>Learn from accepted and undone loanword suggestions (off when IT policy disables learning).</summary>
+    public bool LearnLoanwords { get; init; } = true;
+
     /// <summary>
     /// Debug builds only: include the words themselves in debug log events. Ignored, and
     /// compiled out, in Release builds.

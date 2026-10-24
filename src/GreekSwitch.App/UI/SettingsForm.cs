@@ -1,6 +1,7 @@
 using GreekSwitch.App.Policy;
 using GreekSwitch.App.Settings;
 using GreekSwitch.Core.Input;
+using GreekSwitch.Core.Loanwords;
 
 namespace GreekSwitch.App.UI;
 
@@ -19,8 +20,12 @@ internal sealed class SettingsForm : Form
     private readonly Dictionary<HotkeyAction, TextBox> _hotkeys = Enum.GetValues<HotkeyAction>().ToDictionary(a => a, _ => new TextBox { Width = 200 });
     private readonly NumericUpDown _minLength = new() { Minimum = 1, Maximum = 20, Width = 70 };
     private readonly NumericUpDown _threshold = new() { Minimum = 0, Maximum = 20, DecimalPlaces = 1, Increment = 0.5m, Width = 70 };
+    private readonly CheckBox _suggestLoanwords = new() { Text = "Suggest English words written in &Greek letters (κοντέινερ → container; Tab accepts)", AutoSize = true };
+    private readonly CheckBox _autoLoanwords = new() { Text = "…and replace clear tech terms automatically (ντεπλόι → deploy)", AutoSize = true };
     private readonly TextBox _excluded = MultilineBox();
+    private readonly TextBox _suggestOnly = MultilineBox(60);
     private readonly TextBox _neverConvert = MultilineBox();
+    private readonly TextBox _loanwordPairs = MultilineBox(60);
 
     /// <param name="managed">IT policy: the controls it sets are shown disabled, with their policy values.</param>
     /// <param name="learnedCount">Words learned from undo and from the convert hotkey (both hashed).</param>
@@ -46,6 +51,16 @@ internal sealed class SettingsForm : Form
             _enabled.Text += $" ({SetByOrganization})";
         }
 
+        _suggestLoanwords.Checked = managed.EffectiveSuggestLoanwords(settings);
+        if (managed.DisableLoanwordSuggestions)
+        {
+            _suggestLoanwords.Enabled = false;
+            _suggestLoanwords.Text += $" ({SetByOrganization})";
+        }
+
+        _autoLoanwords.Checked = settings.AutoReplaceLoanwords;
+        _suggestOnly.Text = string.Join(Environment.NewLine, settings.SuggestOnlyProcesses);
+        _loanwordPairs.Text = string.Join(Environment.NewLine, settings.LoanwordPairs.Select(p => $"{p.Greek} = {p.Target}"));
         _startWithWindows.Checked = startWithWindows;
         _correctOnEnter.Checked = settings.CorrectOnEnterAndTab;
         _flash.Checked = settings.FlashOnCorrection;
@@ -70,7 +85,7 @@ internal sealed class SettingsForm : Form
         CancelButton = cancel;
         ok.Click += (_, _) =>
         {
-            if (HotkeyError() is { } error)
+            if ((HotkeyError() ?? PairsError()) is { } error)
             {
                 MessageBox.Show(this, error, "GreekSwitch", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.None; // keep the dialog open
@@ -104,11 +119,17 @@ internal sealed class SettingsForm : Form
         AddRow(layout, Label(managed.ExcludedProcesses is null ? "Excluded apps (one .exe per line):" : $"Excluded apps ({SetByOrganization}):"));
         AddRow(layout, _excluded);
         AddRow(layout, restore);
+        AddRow(layout, Label("Only suggest corrections, never make them, in these apps (one .exe per line):"));
+        AddRow(layout, _suggestOnly);
         AddRow(layout, Label("Never convert these words (one per line):"));
         AddRow(layout, _neverConvert);
+        AddRow(layout, _suggestLoanwords);
+        AddRow(layout, _autoLoanwords);
+        AddRow(layout, Label("Always replace these words (one \"Greek = English\" per line):"));
+        AddRow(layout, _loanwordPairs);
         var learned = Label(managed.DisableUndoLearning
-            ? $"Learning from undo and the convert hotkey is off ({SetByOrganization}). {learnedCount} word(s) learned earlier still apply, stored only as unreadable hashes."
-            : $"Plus {learnedCount} word(s) learned from undo and the convert hotkey, stored only as unreadable hashes.");
+            ? $"Learning from undo, the convert hotkey and suggestions is off ({SetByOrganization}). {learnedCount} word(s) learned earlier still apply, stored only as unreadable hashes."
+            : $"Plus {learnedCount} word(s) learned from undo, the convert hotkey and suggestions, stored only as unreadable hashes.");
         var forget = new Button { Text = "Forget learned words", AutoSize = true, Enabled = learnedCount > 0 };
         forget.Click += (_, _) =>
         {
@@ -120,11 +141,6 @@ internal sealed class SettingsForm : Form
         AddRow(layout, Label(managed.AdditionalAlwaysExcluded.Count == 0
             ? "Password managers are always excluded."
             : $"Password managers and {managed.AdditionalAlwaysExcluded.Count} more app(s) are always excluded ({SetByOrganization}): {string.Join(", ", managed.AdditionalAlwaysExcluded)}."));
-        if (managed.DisableLoanwordSuggestions)
-        {
-            AddRow(layout, Label($"Loanword suggestions are off ({SetByOrganization})."));
-        }
-
         var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(ok);
@@ -139,14 +155,28 @@ internal sealed class SettingsForm : Form
     /// <summary>The user asked to forget every learned word (from undo and from the convert hotkey).</summary>
     public bool ForgetLearnedWords { get; private set; }
 
-    private static TextBox MultilineBox() => new()
+    private static TextBox MultilineBox(int height = 110) => new()
     {
         Multiline = true,
         ScrollBars = ScrollBars.Vertical,
         Width = 420,
-        Height = 110,
+        Height = height,
         AcceptsReturn = true,
     };
+
+    /// <summary>"κοντέινερ = container" per line, or null for a line that isn't a pair.</summary>
+    private static LoanwordPair? ParsePair(string line)
+    {
+        var parts = line.Split('=', 2, StringSplitOptions.TrimEntries);
+        return parts.Length == 2 && parts[0].Length > 0 && LoanwordPairStore.IsValidLearnedTarget(parts[1])
+            ? new LoanwordPair(parts[0], parts[1])
+            : null;
+    }
+
+    private string? PairsError() =>
+        Lines(_loanwordPairs).FirstOrDefault(l => ParsePair(l) is null) is { } bad
+            ? $"\"{bad}\" is not a pair. Write the Greek word, then =, then one English word, e.g. κοντέινερ = container."
+            : null;
 
     private static Label Label(string text) => new() { Text = text, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 8, 3, 3) };
 
@@ -209,7 +239,12 @@ internal sealed class SettingsForm : Form
         ConvertSelectionHotkey = HotkeyValue(HotkeyAction.ConvertSelection),
         ToggleHotkey = HotkeyValue(HotkeyAction.Toggle),
         FirstRunCompleted = original.FirstRunCompleted,
-        SuggestLoanwords = original.SuggestLoanwords,
+        // Unchanged underneath while the policy turns suggestions off.
+        SuggestLoanwords = _managed.DisableLoanwordSuggestions ? original.SuggestLoanwords : _suggestLoanwords.Checked,
+        AutoReplaceLoanwords = _autoLoanwords.Checked,
+        LoanwordPairs = [.. Lines(_loanwordPairs).Select(ParsePair).OfType<LoanwordPair>()],
+        LoanwordLearned = original.LoanwordLearned,
+        SuggestOnlyProcesses = Lines(_suggestOnly),
         AlwaysConvertLearned = original.AlwaysConvertLearned,
         MinLength = (int)_minLength.Value,
         ReplaceThreshold = (double)_threshold.Value,
