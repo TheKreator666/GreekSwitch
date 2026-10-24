@@ -14,6 +14,7 @@ public enum InputEventKind
     PolicyChanged,
     PasswordChecked,
     SessionReset,
+    ConvertLastWord,
     HookError,
 }
 
@@ -54,6 +55,9 @@ public readonly record struct InputEvent(
 
     /// <summary>Lock, unlock, sleep or resume: forget the word in progress.</summary>
     public static InputEvent SessionChange() => new(InputEventKind.SessionReset);
+
+    /// <summary>The "convert last word" hotkey was pressed.</summary>
+    public static InputEvent ConvertLastWord() => new(InputEventKind.ConvertLastWord);
 
     public static InputEvent Error(Exception ex) => new(InputEventKind.HookError, ErrorType: ex.GetType().Name);
 }

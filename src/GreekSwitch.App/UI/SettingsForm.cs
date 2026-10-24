@@ -1,4 +1,5 @@
 using GreekSwitch.App.Settings;
+using GreekSwitch.Core.Input;
 
 namespace GreekSwitch.App.UI;
 
@@ -8,12 +9,17 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _enabled = new() { Text = "&Enabled", AutoSize = true };
     private readonly CheckBox _startWithWindows = new() { Text = "Start with &Windows", AutoSize = true };
     private readonly CheckBox _correctOnEnter = new() { Text = "Also correct words ended by Enter or &Tab", AutoSize = true };
+    private readonly CheckBox _flash = new() { Text = "&Flash the tray icon when a word is corrected", AutoSize = true };
+    private readonly CheckBox _capsLock = new() { Text = "Fix words typed with &Caps Lock on by accident (hELLO → Hello)", AutoSize = true };
+    private readonly Dictionary<HotkeyAction, TextBox> _hotkeys = Enum.GetValues<HotkeyAction>().ToDictionary(a => a, _ => new TextBox { Width = 200 });
     private readonly NumericUpDown _minLength = new() { Minimum = 1, Maximum = 20, Width = 70 };
     private readonly NumericUpDown _threshold = new() { Minimum = 0, Maximum = 20, DecimalPlaces = 1, Increment = 0.5m, Width = 70 };
     private readonly TextBox _excluded = MultilineBox();
     private readonly TextBox _neverConvert = MultilineBox();
 
-    public SettingsForm(AppSettings settings, bool startWithWindows)
+    /// <param name="learnedCount">Words learned from undo and from the convert hotkey (both hashed).</param>
+    /// <param name="unavailableHotkeys">Hotkeys another program already owns.</param>
+    public SettingsForm(AppSettings settings, bool startWithWindows, int learnedCount, IReadOnlyList<string> unavailableHotkeys)
     {
         Text = "GreekSwitch Settings";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -29,6 +35,13 @@ internal sealed class SettingsForm : Form
         _enabled.Checked = settings.Enabled;
         _startWithWindows.Checked = startWithWindows;
         _correctOnEnter.Checked = settings.CorrectOnEnterAndTab;
+        _flash.Checked = settings.FlashOnCorrection;
+        _capsLock.Checked = settings.FixAccidentalCapsLock;
+        foreach (var (action, box) in _hotkeys)
+        {
+            box.Text = AppHotkeys.Text(settings, action);
+        }
+
         _minLength.Value = settings.MinLength;
         _threshold.Value = (decimal)settings.ReplaceThreshold;
         _excluded.Text = string.Join(Environment.NewLine, settings.ExcludedProcesses);
@@ -41,7 +54,17 @@ internal sealed class SettingsForm : Form
         restore.Click += (_, _) => _excluded.Text = string.Join(Environment.NewLine, AppSettings.DefaultExcludedProcesses);
         AcceptButton = ok;
         CancelButton = cancel;
-        ok.Click += (_, _) => Result = Collect(settings);
+        ok.Click += (_, _) =>
+        {
+            if (HotkeyError() is { } error)
+            {
+                MessageBox.Show(this, error, "GreekSwitch", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None; // keep the dialog open
+                return;
+            }
+
+            Result = Collect(settings);
+        };
 
         var layout = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Dock = DockStyle.Fill };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -49,15 +72,28 @@ internal sealed class SettingsForm : Form
         AddRow(layout, _enabled);
         AddRow(layout, _startWithWindows);
         AddRow(layout, _correctOnEnter);
+        AddRow(layout, _flash);
+        AddRow(layout, _capsLock);
         AddRow(layout, Label("Minimum word length (keys):"), _minLength);
         AddRow(layout, Label("Replace threshold (score margin):"), _threshold);
+        foreach (var (action, box) in _hotkeys)
+        {
+            AddRow(layout, Label($"{AppHotkeys.Name(action)} hotkey:"), box);
+        }
+
+        AddRow(layout, Label("Hotkeys: e.g. Ctrl+Alt+Space, Win+Shift+K, F9. Leave empty to turn one off."));
+        if (unavailableHotkeys.Count > 0)
+        {
+            AddRow(layout, Label("Already used by another program, choose other keys: " + string.Join(", ", unavailableHotkeys) + "."));
+        }
+
         AddRow(layout, Label("Excluded apps (one .exe per line):"));
         AddRow(layout, _excluded);
         AddRow(layout, restore);
         AddRow(layout, Label("Never convert these words (one per line):"));
         AddRow(layout, _neverConvert);
-        var learned = Label($"Plus {settings.NeverConvertLearned.Count} word(s) learned from undo, stored only as unreadable hashes.");
-        var forget = new Button { Text = "Forget learned words", AutoSize = true, Enabled = settings.NeverConvertLearned.Count > 0 };
+        var learned = Label($"Plus {learnedCount} word(s) learned from undo and the convert hotkey, stored only as unreadable hashes.");
+        var forget = new Button { Text = "Forget learned words", AutoSize = true, Enabled = learnedCount > 0 };
         forget.Click += (_, _) =>
         {
             ForgetLearnedWords = true;
@@ -78,7 +114,7 @@ internal sealed class SettingsForm : Form
 
     public bool StartWithWindows => _startWithWindows.Checked;
 
-    /// <summary>The user asked to forget every word learned from undo.</summary>
+    /// <summary>The user asked to forget every learned word (from undo and from the convert hotkey).</summary>
     public bool ForgetLearnedWords { get; private set; }
 
     private static TextBox MultilineBox() => new()
@@ -107,10 +143,50 @@ internal sealed class SettingsForm : Form
     private static List<string> Lines(TextBox box) =>
         [.. box.Lines.Select(l => l.Trim()).Where(l => l.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
 
+    /// <summary>Each hotkey must be empty or one key plus modifiers, and no two may be the same.</summary>
+    private string? HotkeyError()
+    {
+        var seen = new HashSet<KeyChord>();
+        foreach (var (action, box) in _hotkeys)
+        {
+            if (string.IsNullOrWhiteSpace(box.Text))
+            {
+                continue;
+            }
+
+            if (HotkeyText.Parse(box.Text) is not { } chord)
+            {
+                return $"\"{box.Text.Trim()}\" is not a hotkey ({AppHotkeys.Name(action)}). Use one key plus Ctrl, Alt, Shift or Win, e.g. Ctrl+Alt+Space.";
+            }
+
+            if (!chord.Control && !chord.Alt && !chord.Win && chord.VirtualKey is not (>= 0x70 and <= 0x87 or 0x13 or 0x91))
+            {
+                return $"{AppHotkeys.Name(action)}: add Ctrl, Alt or Win, or that key could no longer be typed.";
+            }
+
+            if (!seen.Add(chord))
+            {
+                return $"{AppHotkeys.Name(action)}: the same hotkey is used twice.";
+            }
+        }
+
+        return null;
+    }
+
+    private string HotkeyValue(HotkeyAction action) =>
+        HotkeyText.Parse(_hotkeys[action].Text) is { } chord ? HotkeyText.Format(chord) : "";
+
     private AppSettings Collect(AppSettings original) => new()
     {
         Enabled = _enabled.Checked,
         CorrectOnEnterAndTab = _correctOnEnter.Checked,
+        FlashOnCorrection = _flash.Checked,
+        FixAccidentalCapsLock = _capsLock.Checked,
+        ConvertLastWordHotkey = HotkeyValue(HotkeyAction.ConvertLastWord),
+        ConvertSelectionHotkey = HotkeyValue(HotkeyAction.ConvertSelection),
+        ToggleHotkey = HotkeyValue(HotkeyAction.Toggle),
+        FirstRunCompleted = original.FirstRunCompleted,
+        AlwaysConvertLearned = original.AlwaysConvertLearned,
         MinLength = (int)_minLength.Value,
         ReplaceThreshold = (double)_threshold.Value,
         DictionaryWeight = original.DictionaryWeight,

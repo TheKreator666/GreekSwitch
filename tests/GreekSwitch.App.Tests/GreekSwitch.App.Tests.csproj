@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\GreekSwitch.App\GreekSwitch.App.csproj" />
+    <ProjectReference Include="..\GreekSwitch.TestSupport\GreekSwitch.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

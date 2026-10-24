@@ -9,6 +9,8 @@ page explains what it captures, what it doesn't, and why.
 |---|---|---|
 | Virtual-key code and Shift / Caps Lock / Ctrl / Alt / Win state of each **physical** key press | To re-read the current word in both layouts | An in-memory queue, then an in-memory word buffer. The buffer is **wiped** (overwritten, not just emptied) at every word boundary, click, focus change, caret key or shortcut. |
 | The keys of the last 1–3 completed words of the current run (same field, separated only by spaces) | So that after a confident correction the words just before it can be fixed too ("den θέλω" → "δεν θέλω") | Memory only. Wiped on any reset, punctuation, Enter/Tab, a Backspace into earlier text, or when a word leaves the 3-word window. |
+| The keys of the last completed word and its delimiter | So the *Convert last word* hotkey can convert it after you've pressed Space | Memory only. Wiped on any reset (click, focus change, caret key, shortcut) and replaced by the next word. |
+| The selected text, only when you press the *Convert selection* hotkey | To convert it to the other layout | Copied by the app itself (GreekSwitch sends Ctrl+C), converted in memory, pasted back (Ctrl+V), and then your previous clipboard content is put back. Never stored or logged. See *The clipboard* below. |
 | Which control had keyboard focus for each key (a window handle) | So a correction is only typed into the control the word was typed into | Memory only |
 | That a mouse button was pressed (not where) | A click may move the caret, so the word is forgotten | Nowhere; it only clears the buffer |
 | The foreground app's executable name (e.g. `notepad.exe`) | To honour the exclusion list | Memory only |
@@ -34,8 +36,10 @@ excluded. That list is built in, so editing `settings.json` can't remove them.
   forms that show the password). Undo therefore remembers only an HMAC-SHA256 hash of it. The
   HMAC key is random per installation and stored in `settings.json` **encrypted with Windows
   DPAPI** for your user account. So the hashes can't be tested against guesses on another
-  machine, under another account, or from a backup of the file. Settings → *Forget learned
-  words* deletes them.
+  machine, under another account, or from a backup of the file. The *Convert last word* hotkey
+  learns the same way: a word you convert by hotkey is remembered as a hash on an
+  "always convert" list (or, if GreekSwitch had converted it, on the never-convert list).
+  Settings → *Forget learned words* deletes both lists.
 - **No crash dumps.** GreekSwitch excludes itself from Windows Error Reporting at start-up, so a
   crash doesn't produce a report or dump of its memory. This doesn't stop an administrator who
   has configured system-wide dump collection, and memory isn't encrypted while running.
@@ -53,7 +57,7 @@ excluded. That list is built in, so editing `settings.json` can't remove them.
 
 | Location | Contents |
 |---|---|
-| `%APPDATA%\GreekSwitch\settings.json` | Settings, the exclusion list, the never-convert words **you typed into Settings** (readable, so you can edit them), the **hashes** of words learned from undo, and the DPAPI-encrypted key for those hashes |
+| `%APPDATA%\GreekSwitch\settings.json` | Settings, the exclusion list, the hotkeys, the never-convert words **you typed into Settings** (readable, so you can edit them), the **hashes** of words learned from undo and from the *Convert last word* hotkey, and the DPAPI-encrypted key for those hashes |
 | `%LOCALAPPDATA%\GreekSwitch\greekswitch.log` (+ `.1`) | Event log without text, rolled at 1 MB |
 | `HKCU\Software\Microsoft\Windows\Windows Error Reporting\ExcludedApplications` | The exe name, so crashes aren't reported or dumped |
 | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\GreekSwitch` | Only if you turn on "Start with Windows" |
@@ -81,6 +85,30 @@ the word. It does nothing else to other processes. Safeguards:
   the exclusion list and `correctOnEnterAndTab` say.
 - **Never while you type ahead or hold Ctrl/Alt/Win.** Otherwise its Backspaces could delete
   your new letters, or trigger shortcuts.
+
+It also registers its three hotkeys with `RegisterHotKey` (on the UI thread, not in the hook).
+Windows then delivers those key combinations to GreekSwitch instead of the focused app.
+
+### The clipboard
+
+Only the *Convert selection* hotkey touches the clipboard, and only when GreekSwitch is
+capturing in that window (not in password fields, password managers or excluded apps). It
+waits until you release the hotkey, never sends Ctrl+C to a terminal (where it would interrupt
+the running command), and:
+
+1. keeps a copy of what's on the clipboard (every format it can read back);
+2. sends Ctrl+C; the app copies the selection;
+3. converts the text in memory and puts it on the clipboard **marked to stay out of clipboard
+   history and cloud clipboard** (`CanIncludeInClipboardHistory` = 0,
+   `CanUploadToCloudClipboard` = 0, `ExcludeClipboardContentFromMonitorProcessing`);
+4. sends Ctrl+V, waits half a second for the app to paste, and switches the layout;
+5. puts your previous clipboard content back (with the same markers, so it isn't added to the
+   history a second time).
+
+One copy is outside GreekSwitch's control: in step 2 *the app* writes the selected text to the
+clipboard, without those markers. With clipboard history (Win+V) or a clipboard manager turned
+on, the original selection therefore appears there, just as if you had pressed Ctrl+C yourself.
+Content that can't be read back (some delay-rendered or private formats) can't be restored.
 
 ## Verifying the exe
 

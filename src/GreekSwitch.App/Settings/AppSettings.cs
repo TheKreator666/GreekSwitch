@@ -4,7 +4,7 @@ namespace GreekSwitch.App.Settings;
 internal sealed class AppSettings
 {
     /// <summary>Version of this file's schema/defaults; older files are migrated on load.</summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     /// <summary>
     /// Defaults added in version 2 (remote desktops, VMs), merged once into existing files'
@@ -56,6 +56,27 @@ internal sealed class AppSettings
 
     /// <summary>The HMAC key for <see cref="NeverConvertLearned"/>, encrypted with DPAPI for this Windows user.</summary>
     public string? NeverConvertKey { get; set; }
+
+    /// <summary>Learned from "convert last word" on a word the engine kept: HMAC hashes, same key as above.</summary>
+    public List<string> AlwaysConvertLearned { get; set; } = [];
+
+    /// <summary>Hotkey: convert the word before the caret to the other layout.</summary>
+    public string ConvertLastWordHotkey { get; set; } = "Ctrl+Alt+Space";
+
+    /// <summary>Hotkey: convert the selected text (copy, convert, paste, restore the clipboard).</summary>
+    public string ConvertSelectionHotkey { get; set; } = "Ctrl+Alt+Shift+Space";
+
+    /// <summary>Hotkey: the same switch as the tray menu's Enabled.</summary>
+    public string ToggleHotkey { get; set; } = "Ctrl+Alt+Shift+G";
+
+    /// <summary>Flash the tray icon briefly when a correction happens.</summary>
+    public bool FlashOnCorrection { get; set; } = true;
+
+    /// <summary>Fix words typed with Caps Lock on by accident ("hELLO" → "Hello") and turn Caps Lock off.</summary>
+    public bool FixAccidentalCapsLock { get; set; }
+
+    /// <summary>The first-run dialog has been shown.</summary>
+    public bool FirstRunCompleted { get; set; }
 
     /// <summary>Debug builds only: log the words themselves. Ignored in Release builds.</summary>
     public bool DebugLogText { get; set; }

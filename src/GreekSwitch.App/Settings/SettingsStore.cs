@@ -116,6 +116,11 @@ internal sealed class SettingsStore
             s.ExcludedProcesses = [.. s.ExcludedProcesses ?? [], .. AppSettings.AddedInVersion2.Where(p => !current.Contains(p))];
         }
 
+        if (s.SettingsVersion < 3)
+        {
+            s.FirstRunCompleted = true; // existing users have already set things up
+        }
+
         _logger.LogInformation("settings.json migrated from version {From} to {To}", s.SettingsVersion, AppSettings.CurrentVersion);
         s.SettingsVersion = AppSettings.CurrentVersion;
         return true;
@@ -127,6 +132,8 @@ internal sealed class SettingsStore
         s.ReplaceThreshold = Math.Clamp(s.ReplaceThreshold, 0, 20);
         s.ExcludedProcesses = [.. (s.ExcludedProcesses ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim())];
         s.NeverConvert = [.. (s.NeverConvert ?? []).Where(w => !string.IsNullOrWhiteSpace(w)).Select(w => w.Trim())];
+        s.NeverConvertLearned ??= [];
+        s.AlwaysConvertLearned ??= [];
         return s;
     }
 }

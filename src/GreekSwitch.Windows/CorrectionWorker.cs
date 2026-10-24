@@ -98,6 +98,14 @@ public sealed class CorrectionWorker
                 _session.Reset();
                 _engine.ClearContext();
                 break;
+            case InputEventKind.ConvertLastWord:
+                // Never in a password field or an excluded app: nothing was captured there anyway.
+                if (_monitor.CaptureKeys)
+                {
+                    _session.ConvertLastWord();
+                }
+
+                break;
             case InputEventKind.HookError:
                 _logger.LogError("Keyboard hook callback failed: {Type}", input.ErrorType);
                 _session.Reset();

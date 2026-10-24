@@ -128,6 +128,46 @@ Tip: make the active layout visible in the taskbar, so you can see GreekSwitch s
       stops receiving input after three reinstalls does it turn red with
       `GreekSwitch: error, see the log`.
 
+## 11. Hotkeys and first run (milestone 13)
+
+- [ ] **First run:** close GreekSwitch, rename `%APPDATA%\GreekSwitch\settings.json`, start it.
+      The welcome dialog shows ✓ for both layouts, the capture summary and the three hotkeys.
+      *Start with Windows* is unticked. OK closes it, and it doesn't come back on the next start.
+      Put the old settings.json back afterwards.
+- [ ] **First run, missing layout** (a test account with only English): the dialog shows
+      ✗ for Greek and how to add it.
+- [ ] **Convert last word:** in a new Notepad tab (EN active), type `to ` (kept: it's an English
+      word) and press **Ctrl+Alt+Space**. It becomes `το ` and the layout is GR. Backspace right
+      after puts `to` back.
+- [ ] Convert last word **mid-word**: type `kalhm` and press Ctrl+Alt+Space. It becomes `καλημ`;
+      keep typing in Greek and nothing else changes.
+- [ ] **Learning:** type `to ` in EN again and convert it with the hotkey, this time without
+      undoing (undo also forgets what the hotkey taught). Switch to EN and type `to ` once more:
+      it is converted automatically. Settings shows the learned count; *Forget learned words*
+      clears it.
+- [ ] **Convert selection:** copy some text of your own (e.g. `keep me`), then in Notepad
+      select `Kalhm;era sas, ti k;aneis?` and press **Ctrl+Alt+Shift+Space**. It becomes
+      `Καλημέρα σας, τι κάνεις;`, the layout is GR, and Ctrl+V pastes `keep me` again.
+- [ ] Convert selection in **Word** (formatting of the paste is plain text) and **Chrome**
+      (a text area). Ctrl+Shift+C must not open the developer tools.
+- [ ] Convert selection with **nothing selected**: nothing is pasted and the clipboard is
+      unchanged (log: `nothing was copied`).
+- [ ] With **clipboard history** on (Win+V): after Convert selection, the converted text is not
+      in the history; the original selection is (the app copied it). Your earlier entry isn't
+      duplicated.
+- [ ] Convert selection in a **password field** or in **Windows Terminal**: nothing happens.
+- [ ] **Toggle:** Ctrl+Alt+Shift+G turns GreekSwitch off (grey icon, *Enabled* unticked) and
+      on again.
+- [ ] **Hotkey already taken:** register Ctrl+Alt+Space in another program first (e.g. an
+      AutoHotkey script), then start GreekSwitch. Settings lists it as already used; the log says
+      `Hotkey for 'Convert last word' is already used by another program`.
+- [ ] **Changing hotkeys:** set Convert last word to `F9` in Settings; F9 converts, Ctrl+Alt+Space
+      no longer does. An invalid entry (`Ctrl+Alt`) or `Q` alone is refused with a message.
+- [ ] **Alt menu:** after Ctrl+Alt+Space in Notepad, the menu bar is not activated.
+- [ ] **Flash:** a correction flashes the tray icon green; with *Flash* unticked in Settings, it doesn't.
+- [ ] **Accidental Caps Lock** (tick it in Settings): with Caps Lock on, type `hELLO ` (Shift on
+      the first letter). It becomes `Hello ` and Caps Lock is off. Unticked (the default), it stays.
+
 ## 9. Privacy spot checks
 
 - [ ] After a session of typing, search the log for words you typed. None appear.

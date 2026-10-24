@@ -32,6 +32,10 @@ so every word has a Greek reading and an English reading of the same keystrokes:
    - **Settings…**: also opens on a double-click of the icon.
    - **Exit**
 
+   The icon flashes green for a moment when it corrects a word (Settings can turn that off).
+   On the first run a short dialog checks that both layouts are installed, says what is
+   captured, lists the hotkeys and offers *Start with Windows*.
+
 > **The exe is unsigned.** Windows SmartScreen may warn on first run (*More info → Run anyway*).
 > Some antivirus products flag *any* program that combines a global keyboard hook with
 > `SendInput`, because keyloggers and macro tools use the same APIs. See [SECURITY.md](SECURITY.md)
@@ -60,6 +64,21 @@ Words you type into the Settings list yourself are kept as readable text. Any ot
 after a correction (or a click, arrow key, focus change and so on) disarms undo, and Backspace
 becomes an ordinary Backspace again.
 
+## Hotkeys
+
+Detection will never be perfect, so there are three hotkeys. Change them in Settings (leave one
+empty to turn it off); if another program already owns one, Settings says so.
+
+| Default | Does |
+|---|---|
+| **Ctrl+Alt+Space** | **Convert last word**: converts the word you're typing, or the one you just finished, to the other layout, even if GreekSwitch kept it. Backspace right after undoes it. GreekSwitch learns from it (as a hash): a word it kept is converted automatically from then on; a word it had converted is left alone. |
+| **Ctrl+Alt+Shift+Space** | **Convert selection**: converts the selected text, for a whole sentence typed in the wrong layout. It copies the selection, converts it, pastes it back, switches the layout and restores your clipboard (see [SECURITY.md](SECURITY.md#the-clipboard)). |
+| **Ctrl+Alt+Shift+G** | **Turn on/off**: the same as the tray menu's *Enabled*. |
+
+The convert hotkeys do nothing where GreekSwitch is passive (password fields, password
+managers, excluded apps, while disabled or paused). Convert selection is never used in a
+terminal, where Ctrl+C would interrupt the running command.
+
 ## Settings
 
 The Settings dialog edits `%APPDATA%\GreekSwitch\settings.json`. You can also edit the file by
@@ -76,6 +95,11 @@ hand while GreekSwitch is closed:
 | `excludedProcesses` | terminals, IDEs, game launchers and common games | Executable names where GreekSwitch is completely passive. The defaults include `WindowsTerminal.exe`, `cmd.exe`, `powershell.exe`, `pwsh.exe`, `Code.exe`, `devenv.exe` and `rider64.exe`. "Restore default exclusions" in the dialog brings the list back. Password managers are **always** excluded, built in, and not part of this list. |
 | `neverConvert` | `[]` | Words never to convert that you typed into Settings (accent- and case-insensitive). |
 | `neverConvertLearned` / `neverConvertKey` | | Words learned from undo, as HMAC hashes, and their key, encrypted with DPAPI for your Windows account. Not meant to be edited; *Forget learned words* in Settings clears them. Hashes copied to another machine or account don't work there. |
+| `alwaysConvertLearned` | | Words you converted with the *Convert last word* hotkey after GreekSwitch kept them, as HMAC hashes (same key). Cleared by *Forget learned words*. |
+| `convertLastWordHotkey` / `convertSelectionHotkey` / `toggleHotkey` | `Ctrl+Alt+Space` / `Ctrl+Alt+Shift+Space` / `Ctrl+Alt+Shift+G` | The hotkeys (see *Hotkeys*). Empty turns one off. |
+| `flashOnCorrection` | `true` | Flash the tray icon green for a moment after a correction. |
+| `fixAccidentalCapsLock` | `false` | A word typed with Caps Lock on by accident (`hELLO`) becomes `Hello`, and Caps Lock is turned off. |
+| `firstRunCompleted` | `false` | The first-run dialog has been shown. Existing installs are set to `true` on upgrade. |
 | `debugLogText` | `false` | **Debug builds only**: log the words themselves. Compiled out of Release builds. |
 
 Start with Windows lives in the registry, not in this file.

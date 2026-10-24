@@ -88,6 +88,28 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void New_installs_get_the_first_run_dialog_and_existing_ones_do_not()
+    {
+        new SettingsStore(_dir, NullLogger.Instance).Load().FirstRunCompleted.Should().BeFalse("a new install");
+
+        var existing = Path.Combine(_dir, "existing");
+        Directory.CreateDirectory(existing);
+        File.WriteAllText(Path.Combine(existing, "settings.json"), "{ \"settingsVersion\": 2 }");
+        new SettingsStore(existing, NullLogger.Instance).Load().FirstRunCompleted.Should().BeTrue("set up before the dialog existed");
+    }
+
+    [Fact]
+    public void Hotkey_defaults_parse()
+    {
+        var settings = new AppSettings();
+
+        foreach (var hotkey in new[] { settings.ConvertLastWordHotkey, settings.ConvertSelectionHotkey, settings.ToggleHotkey })
+        {
+            GreekSwitch.Core.Input.HotkeyText.Parse(hotkey).Should().NotBeNull(hotkey);
+        }
+    }
+
+    [Fact]
     public void Remote_desktop_and_vm_clients_are_excluded_by_default()
     {
         AppSettings.DefaultExcludedProcesses.Should().Contain(["mstsc.exe", "wfica32.exe", "CDViewer.exe", "vmconnect.exe", "AnyDesk.exe", "TeamViewer.exe"]);

@@ -50,6 +50,7 @@ internal sealed class GreekSwitchHost : IDisposable
     private readonly DecisionEngine _engine;
     private readonly TypingSession _session;
     private readonly CorrectionWorker _workerLoop;
+    private readonly ILayoutSwitcher _layouts;
     private readonly CancellationTokenSource _stop = new();
     private readonly ILogger _logger;
     private readonly System.Threading.Timer _watchdog;
@@ -60,14 +61,17 @@ internal sealed class GreekSwitchHost : IDisposable
     private volatile bool _sessionLocked;
     private volatile HostHealth _health = HostHealth.Healthy;
 
-    private GreekSwitchHost(InputMonitor monitor, UiaThread uia, DecisionEngine engine, TypingSession session, CorrectionWorker worker, ILogger logger)
+    private GreekSwitchHost(InputMonitor monitor, UiaThread uia, DecisionEngine engine, TypingSession session, CorrectionWorker worker, Corrector corrector, ILayoutSwitcher layouts, TextConverter converter, ILogger logger)
     {
         _uia = uia;
         _monitor = monitor;
         _engine = engine;
         _session = session;
         _workerLoop = worker;
+        _layouts = layouts;
+        TextConverter = converter;
         _logger = logger;
+        corrector.Applied += (_, _) => Corrected?.Invoke(this, EventArgs.Empty);
         StartWorker();
         _watchdog = new System.Threading.Timer(_ => CheckHooks(), null, WatchdogInterval, WatchdogInterval);
     }
@@ -75,9 +79,26 @@ internal sealed class GreekSwitchHost : IDisposable
     /// <summary>Raised (on a background thread) when <see cref="Health"/> changes.</summary>
     public event EventHandler? HealthChanged;
 
+    /// <summary>Raised (on the worker thread) after a correction was typed: drives the tray flash.</summary>
+    public event EventHandler? Corrected;
+
     public HostHealth Health => _health;
 
-    public static async Task<GreekSwitchHost> StartAsync(AppSettings settings, AppPolicy policy, NeverConvertList neverConvert, ILogger logger)
+    /// <summary>
+    /// The hook is capturing keys for the focused window: enabled, not paused, not an excluded
+    /// app or a password field. The hotkey actions do nothing otherwise.
+    /// </summary>
+    public bool CaptureActive => _monitor.CaptureKeys;
+
+    /// <summary>Ctrl, Alt, Shift or Win is physically held (e.g. still down from a hotkey).</summary>
+    public bool ModifierHeld => _monitor.Keyboard.CommandModifierHeld || _monitor.Keyboard.ShiftHeld;
+
+    /// <summary>Re-reads text in the other layout, with the layouts verified at startup.</summary>
+    public TextConverter TextConverter { get; }
+
+    public ILayoutSwitcher Layouts => _layouts;
+
+    public static async Task<GreekSwitchHost> StartAsync(AppSettings settings, AppPolicy policy, NeverConvertList neverConvert, NeverConvertList alwaysConvert, ILogger logger)
     {
         // Load the language data (and check the layouts) off the UI thread.
         var (dictionaries, trigrams, frequencies, greek, english) = await Task.Run(() =>
@@ -89,7 +110,7 @@ internal sealed class GreekSwitchHost : IDisposable
                 LayoutVerifier.VerifyInstalled(StaticLayouts.English, logger));
         }).ConfigureAwait(true);
 
-        var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams, frequencies), neverConvert, ToScoring(settings));
+        var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams, frequencies), neverConvert, ToScoring(settings), alwaysConvert);
         var layouts = new LayoutSwitcher(logger);
         var uia = new UiaThread();
         var monitor = new InputMonitor
@@ -103,23 +124,25 @@ internal sealed class GreekSwitchHost : IDisposable
             logger.LogWarning("TEST MODE: processing keys injected by other programs");
         }
 
+        var corrector = new Corrector(
+            layouts,
+            lang => lang == Lang.Greek ? greek : english,
+            monitor.TypeAhead,
+            monitor.Keyboard,
+            logger,
+            monitor.Focus,
+            textVerifier: new UiaTextVerifier(uia))
+        {
+            SwitchSettle = TimeSpan.FromMilliseconds(Math.Clamp(settings.LayoutSwitchSettleMs, 0, 250)),
+        };
         var session = new TypingSession(
             engine,
             new KeyClassifier(greek, english),
-            new Corrector(
-                layouts,
-                lang => lang == Lang.Greek ? greek : english,
-                monitor.TypeAhead,
-                monitor.Keyboard,
-                logger,
-                monitor.Focus,
-                textVerifier: new UiaTextVerifier(uia))
-            {
-                SwitchSettle = TimeSpan.FromMilliseconds(Math.Clamp(settings.LayoutSwitchSettleMs, 0, 250)),
-            },
+            corrector,
             neverConvert,
             logger,
-            ToSession(settings));
+            ToSession(settings),
+            alwaysConvert);
 
         try
         {
@@ -134,7 +157,7 @@ internal sealed class GreekSwitchHost : IDisposable
 
         var worker = new CorrectionWorker(monitor, session, engine, layouts, new PasswordFieldDetector(), policy, uia, logger);
         logger.LogInformation("GreekSwitch started");
-        return new GreekSwitchHost(monitor, uia, engine, session, worker, logger);
+        return new GreekSwitchHost(monitor, uia, engine, session, worker, corrector, layouts, new TextConverter(greek, english), logger);
     }
 
     /// <summary>Applies changed settings. Safe from the UI thread: options are swapped atomically.</summary>
@@ -146,6 +169,12 @@ internal sealed class GreekSwitchHost : IDisposable
     }
 
     public void NotifyPolicyChanged() => _monitor.NotifyPolicyChanged();
+
+    /// <summary>The "convert last word" hotkey: the worker converts it after the keys already queued.</summary>
+    public void ConvertLastWord() => _monitor.Post(InputEvent.ConvertLastWord());
+
+    /// <summary>Forget the word in progress and the last word (the text around the caret changed).</summary>
+    public void ForgetWord() => _monitor.Post(InputEvent.SessionChange());
 
     /// <summary>Lock/unlock/sleep/resume: forget the word in progress; after resume, reinstall the hooks.</summary>
     public void NotifySessionChange(SessionChange change)
@@ -194,11 +223,13 @@ internal sealed class GreekSwitchHost : IDisposable
         DictionaryWeight = s.DictionaryWeight,
         NgramWeight = s.NgramWeight,
         ContextWeight = s.ContextWeight,
+        FixAccidentalCapsLock = s.FixAccidentalCapsLock,
     };
 
     private static SessionOptions ToSession(AppSettings s) => new()
     {
         CorrectOnEnterAndTab = s.CorrectOnEnterAndTab,
+        HotkeyChords = [.. AppHotkeys.Parse(s).Values],
         DebugLogText = s.DebugLogText,
     };
 
