@@ -1,5 +1,7 @@
 using System.Text;
 using GreekSwitch.Core.Decisions;
+using GreekSwitch.Core.Input;
+using GreekSwitch.Core.Layout;
 using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Session;
 using GreekSwitch.Core.Tests.Support;
@@ -63,6 +65,21 @@ public class SuggestionTests(LanguageDataFixture data)
         sim.TypeIn(Lang.Greek, " ");
         sim.Suggestion.Should().BeNull("the word the user just took back isn't offered again straight away");
         sim.Screen.Should().Be("κοντέινερ ");
+    }
+
+    [Fact]
+    public void A_stray_accent_mark_inside_a_word_gets_no_suggestion()
+    {
+        // ';' (tonos) before a consonant leaves a lone accent mark in the word.
+        var sim = Simulator();
+        sim.SetActiveLayout(Lang.Greek);
+        foreach (var c in "spi;ti ")
+        {
+            var vk = c switch { ' ' => VirtualKeys.Space, ';' => VirtualKeys.Oem1, _ => char.ToUpperInvariant(c) };
+            sim.Press(new KeyInput(vk));
+        }
+
+        sim.SuggestionsShown.Should().BeEmpty();
     }
 
     [Fact]

@@ -87,10 +87,10 @@ internal static class Program
             Check("loanword: accepted then undone", ReadAndClear(), "κοντέινερ");
 
             // Tab with no suggestion on screen is an ordinary Tab.
-            TypeIn(Lang.Greek, "spi;ti ");
+            TypeIn(Lang.Greek, "sp;iti "); // the tonos key comes before its vowel
             Tap(Tab);
             Thread.Sleep(500);
-            Check("plain tab passes through", ReadAndClear(), "σπιτι 	");
+            Check("plain tab passes through", ReadAndClear(), "σπίτι 	");
         }
         catch (FocusLostException)
         {

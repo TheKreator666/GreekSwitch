@@ -2,6 +2,7 @@ using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Input;
 using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
+using GreekSwitch.Core.Text;
 using Microsoft.Extensions.Logging;
 
 namespace GreekSwitch.Core.Session;
@@ -318,9 +319,9 @@ public sealed class TypingSession
         }
 
         var shown = _engine.Display(word.Keys, word.Layout, word.Layout);
-        if (Scorer.LexicalCore(shown) != shown)
+        if (!shown.All(GreekText.IsGreekLetter))
         {
-            return; // punctuation inside the word's keys ("απ'"): leave it alone
+            return; // punctuation or a stray accent mark (tonos before a consonant) inside the word: leave it alone
         }
 
         switch (_loanwords.Check(shown))
