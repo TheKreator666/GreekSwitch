@@ -24,8 +24,8 @@ Nothing may need installing besides the exe, and both Greek and English layouts 
 dotnet build GreekSwitch.sln -c Release
 dotnet test GreekSwitch.sln -c Release                      # Core tests run on any OS; Windows tests need Windows
 dotnet test tests/GreekSwitch.Core.Tests -c Release --filter "FullyQualifiedName~SentenceTests"
-./build.ps1        # Windows: restore, build, test, publish → publish/GreekSwitch.exe (+ .sha256)
-./build.sh         # same, any OS (publish cross-targets win-x64)
+./build.ps1        # Windows: restore, build, test, publish → publish/win-x64/ and publish/win-arm64/ GreekSwitch.exe (+ .sha256)
+./build.sh         # same, any OS (publish cross-targets win-x64 and win-arm64)
 ```
 
 Regenerate the trigram models with the commands in `data/ngrams/README.md`. Commit the output.
@@ -54,6 +54,7 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
 | Layout read, switch, startup verification | `src/GreekSwitch.Windows/Layouts/` |
 | Focus, password fields, terminals | `src/GreekSwitch.Windows/Focus/` |
 | Tray, settings, logging, composition root | `src/GreekSwitch.App/` (`GreekSwitchHost` wires everything) |
+| IT policy keys (`HKLM`/`HKCU\Software\Policies\GreekSwitch`) | `src/GreekSwitch.App/Policy/` (`ManagedPolicy`, `IPolicyRegistry`), applied by `AppPolicy` |
 | Trigram model builder | `tools/NgramBuilder/` |
 | End-to-end smoke test (manual, takes over the keyboard; not in the solution) | `tools/EndToEndDriver/` |
 | Tests | `tests/GreekSwitch.Core.Tests` (incl. `Support/TypingSimulator`), `tests/GreekSwitch.Windows.Tests` |
@@ -254,6 +255,12 @@ Detection will never be perfect, so give the user an escape hatch.
   - the UIPI limit: no corrections in apps run as administrator;
   - the requirement for both layouts;
   - the policy keys.
+
+**Done (14):** `win-arm64` + `win-x64` in `publish/<rid>/` (signing still a placeholder, for both);
+policy keys via `ManagedPolicy` (HKLM over HKCU over settings.json, never written to it; locked
+controls in Settings and the tray; `DisableUndoLearning` = `NeverConvertList.LearningEnabled`,
+old hashes still apply; `AppSettings.SuggestLoanwords` forced off by policy); MSI/MSIX skipped;
+README "For IT".
 
 ### 15. Loanword suggestions (`κοντέινερ` → `container`)
 Build it as designed in **`docs/loanword-design.md`**:

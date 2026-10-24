@@ -2,7 +2,8 @@
 
 The hooks only react to real keyboard input (injected input is ignored by design), so these
 checks need a person at a keyboard. Run them on a clean Windows 10/11 x64 machine with the
-Greek and English (US) layouts installed, using `publish/GreekSwitch.exe`.
+Greek and English (US) layouts installed, using `publish/win-x64/GreekSwitch.exe` (on an ARM
+laptop, `publish/win-arm64/GreekSwitch.exe`; see section 12).
 
 Tip: make the active layout visible in the taskbar, so you can see GreekSwitch switch it.
 
@@ -171,6 +172,47 @@ test mode; see the comment at the top of its `Program.cs`. It doesn't replace th
 - [ ] **Flash:** a correction flashes the tray icon green; with *Flash* unticked in Settings, it doesn't.
 - [ ] **Accidental Caps Lock** (tick it in Settings): with Caps Lock on, type `hELLO ` (Shift on
       the first letter). It becomes `Hello ` and Caps Lock is off. Unticked (the default), it stays.
+
+## 12. Office deployment (milestone 14)
+
+Policy values go under `HKCU\Software\Policies\GreekSwitch` (needs an administrator PowerShell
+even for HKCU; `New-Item "HKCU:\Software\Policies\GreekSwitch" -Force`). Remove the key after
+these checks. Policies are read at start and when Settings opens.
+
+- [ ] **Lock Enabled off:** set `Enabled` = DWORD 0 and restart GreekSwitch. The icon is grey,
+      the tooltip says `GreekSwitch: disabled by your organization`, and the tray's *Enabled*
+      item reads *Enabled (set by your organization)*, unticked and greyed out. Wrong-layout
+      words aren't corrected. The log has `Policy: Enabled False, …`.
+- [ ] Press the toggle hotkey (Ctrl+Alt+Shift+G): nothing changes; the log says
+      `Enabled not changed: it is set by policy`.
+- [ ] Open Settings: *Enabled* is unticked, greyed out and marked *(Set by your organization)*.
+      Press OK and remove the policy value: after a restart (or reopening Settings) GreekSwitch is
+      on again, because settings.json kept the user's own `"enabled": true`.
+- [ ] **Lock Enabled on** (`Enabled` = 1) while settings.json says `"enabled": false`: GreekSwitch
+      corrects words; *Pause for 5 min* still works.
+- [ ] **Policy picked up when Settings opens:** with GreekSwitch running, set `Enabled` = 0, then
+      open Settings: it shows the lock, and the tray icon turns grey without a restart.
+- [ ] **ExcludedProcesses:** set it (REG_MULTI_SZ) to `notepad.exe`. Settings shows that list
+      read-only under *Excluded apps (Set by your organization)*, *Restore default exclusions* is
+      disabled, and Notepad gets no corrections. Remove it: the user's own list is back.
+- [ ] **AdditionalAlwaysExcluded:** set it to `notepad.exe` (without ExcludedProcesses). Notepad
+      gets no corrections, the user's list in Settings is still editable, and the line under it
+      says password managers and 1 more app are always excluded.
+- [ ] **DisableUndoLearning** = 1: undo a correction with Backspace (it reverts), then type the
+      same word again: it is corrected again (nothing was learned). Settings says learning is off
+      and earlier learned words still apply. The learned count doesn't grow.
+- [ ] **DisableLoanwordSuggestions** = 1: Settings shows *Loanword suggestions are off (Set by
+      your organization)*.
+- [ ] HKLM beats HKCU: set `Enabled` = 1 in HKLM and 0 in HKCU. GreekSwitch is on and locked.
+- [ ] The log never contains the excluded app names from the policy (only counts).
+
+### ARM64 smoke test (on a Windows 11 ARM laptop)
+
+- [ ] `publish/win-arm64/GreekSwitch.exe` matches its `.sha256` and starts without SmartScreen
+      blocking beyond the usual unsigned-app warning. Task Manager → Details shows the
+      architecture as *ARM64* (not x64).
+- [ ] Sections 0, 1 (the reference sentence), 7 (undo) and the Convert last word hotkey work.
+- [ ] Working set after a few minutes of typing is in the same range as on x64 (about 90 MB).
 
 ## 9. Privacy spot checks
 

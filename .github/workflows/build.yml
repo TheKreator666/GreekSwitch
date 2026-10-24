@@ -45,29 +45,44 @@ jobs:
           name: test-results
           path: TestResults
 
-      - name: Publish single-file exe
-        run: >
-          dotnet publish src/GreekSwitch.App -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true -o publish
-
-      # Placeholder: code signing. Store the certificate as a secret and sign here, e.g.
-      #   signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f cert.pfx /p ${{ secrets.CERT_PASSWORD }} publish/GreekSwitch.exe
-      - name: Sign executable (placeholder)
-        run: echo "Code signing not configured; GreekSwitch.exe is unsigned."
-
-      - name: SHA-256 checksum
+      - name: Publish single-file exes (win-x64, win-arm64)
         shell: pwsh
         run: |
-          $hash = (Get-FileHash publish/GreekSwitch.exe -Algorithm SHA256).Hash
-          Set-Content -Path publish/GreekSwitch.exe.sha256 -Value "$hash  GreekSwitch.exe" -Encoding ascii
-          "SHA-256: $hash" >> $env:GITHUB_STEP_SUMMARY
+          foreach ($rid in "win-x64", "win-arm64") {
+            dotnet publish src/GreekSwitch.App -c Release -r $rid --self-contained true `
+              -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+              -p:EnableCompressionInSingleFile=true -o publish/$rid
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
-      - name: Upload GreekSwitch.exe
+      # Placeholder: code signing. Store the certificate as a secret and sign both exes here, e.g.
+      #   signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f cert.pfx /p ${{ secrets.CERT_PASSWORD }} publish/win-x64/GreekSwitch.exe publish/win-arm64/GreekSwitch.exe
+      - name: Sign executables (placeholder)
+        run: echo "Code signing not configured; publish/win-x64/GreekSwitch.exe and publish/win-arm64/GreekSwitch.exe are unsigned."
+
+      - name: SHA-256 checksums
+        shell: pwsh
+        run: |
+          foreach ($rid in "win-x64", "win-arm64") {
+            $hash = (Get-FileHash publish/$rid/GreekSwitch.exe -Algorithm SHA256).Hash
+            Set-Content -Path publish/$rid/GreekSwitch.exe.sha256 -Value "$hash  GreekSwitch.exe" -Encoding ascii
+            "SHA-256 ($rid): $hash" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Upload GreekSwitch.exe (win-x64)
         uses: actions/upload-artifact@v4
         with:
-          name: GreekSwitch
+          name: GreekSwitch-win-x64
           path: |
-            publish/GreekSwitch.exe
-            publish/GreekSwitch.exe.sha256
+            publish/win-x64/GreekSwitch.exe
+            publish/win-x64/GreekSwitch.exe.sha256
+          if-no-files-found: error
+
+      - name: Upload GreekSwitch.exe (win-arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: GreekSwitch-win-arm64
+          path: |
+            publish/win-arm64/GreekSwitch.exe
+            publish/win-arm64/GreekSwitch.exe.sha256
           if-no-files-found: error

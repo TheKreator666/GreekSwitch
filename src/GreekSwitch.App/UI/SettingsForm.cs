@@ -1,3 +1,4 @@
+using GreekSwitch.App.Policy;
 using GreekSwitch.App.Settings;
 using GreekSwitch.Core.Input;
 
@@ -6,6 +7,10 @@ namespace GreekSwitch.App.UI;
 /// <summary>The settings dialog, built in code. Edits a copy; the caller applies it on OK.</summary>
 internal sealed class SettingsForm : Form
 {
+    /// <summary>Shown next to every control the IT policy locks.</summary>
+    public const string SetByOrganization = "Set by your organization";
+
+    private readonly ManagedPolicy _managed;
     private readonly CheckBox _enabled = new() { Text = "&Enabled", AutoSize = true };
     private readonly CheckBox _startWithWindows = new() { Text = "Start with &Windows", AutoSize = true };
     private readonly CheckBox _correctOnEnter = new() { Text = "Also correct words ended by Enter or &Tab", AutoSize = true };
@@ -17,10 +22,12 @@ internal sealed class SettingsForm : Form
     private readonly TextBox _excluded = MultilineBox();
     private readonly TextBox _neverConvert = MultilineBox();
 
+    /// <param name="managed">IT policy: the controls it sets are shown disabled, with their policy values.</param>
     /// <param name="learnedCount">Words learned from undo and from the convert hotkey (both hashed).</param>
     /// <param name="unavailableHotkeys">Hotkeys another program already owns.</param>
-    public SettingsForm(AppSettings settings, bool startWithWindows, int learnedCount, IReadOnlyList<string> unavailableHotkeys)
+    public SettingsForm(AppSettings settings, ManagedPolicy managed, bool startWithWindows, int learnedCount, IReadOnlyList<string> unavailableHotkeys)
     {
+        _managed = managed;
         Text = "GreekSwitch Settings";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -32,7 +39,13 @@ internal sealed class SettingsForm : Form
         Padding = new Padding(12);
         Font = SystemFonts.MessageBoxFont ?? Font;
 
-        _enabled.Checked = settings.Enabled;
+        _enabled.Checked = managed.EffectiveEnabled(settings);
+        if (managed.Enabled is not null)
+        {
+            _enabled.Enabled = false;
+            _enabled.Text += $" ({SetByOrganization})";
+        }
+
         _startWithWindows.Checked = startWithWindows;
         _correctOnEnter.Checked = settings.CorrectOnEnterAndTab;
         _flash.Checked = settings.FlashOnCorrection;
@@ -44,13 +57,14 @@ internal sealed class SettingsForm : Form
 
         _minLength.Value = settings.MinLength;
         _threshold.Value = (decimal)settings.ReplaceThreshold;
-        _excluded.Text = string.Join(Environment.NewLine, settings.ExcludedProcesses);
+        _excluded.Text = string.Join(Environment.NewLine, managed.EffectiveExcluded(settings));
+        _excluded.ReadOnly = managed.ExcludedProcesses is not null;
         _neverConvert.Text = string.Join(Environment.NewLine, settings.NeverConvert);
         Result = settings;
 
         var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var restore = new Button { Text = "Restore default exclusions", AutoSize = true };
+        var restore = new Button { Text = "Restore default exclusions", AutoSize = true, Enabled = managed.ExcludedProcesses is null };
         restore.Click += (_, _) => _excluded.Text = string.Join(Environment.NewLine, AppSettings.DefaultExcludedProcesses);
         AcceptButton = ok;
         CancelButton = cancel;
@@ -87,12 +101,14 @@ internal sealed class SettingsForm : Form
             AddRow(layout, Label("Already used by another program, choose other keys: " + string.Join(", ", unavailableHotkeys) + "."));
         }
 
-        AddRow(layout, Label("Excluded apps (one .exe per line):"));
+        AddRow(layout, Label(managed.ExcludedProcesses is null ? "Excluded apps (one .exe per line):" : $"Excluded apps ({SetByOrganization}):"));
         AddRow(layout, _excluded);
         AddRow(layout, restore);
         AddRow(layout, Label("Never convert these words (one per line):"));
         AddRow(layout, _neverConvert);
-        var learned = Label($"Plus {learnedCount} word(s) learned from undo and the convert hotkey, stored only as unreadable hashes.");
+        var learned = Label(managed.DisableUndoLearning
+            ? $"Learning from undo and the convert hotkey is off ({SetByOrganization}). {learnedCount} word(s) learned earlier still apply, stored only as unreadable hashes."
+            : $"Plus {learnedCount} word(s) learned from undo and the convert hotkey, stored only as unreadable hashes.");
         var forget = new Button { Text = "Forget learned words", AutoSize = true, Enabled = learnedCount > 0 };
         forget.Click += (_, _) =>
         {
@@ -101,7 +117,13 @@ internal sealed class SettingsForm : Form
             learned.Text = "Learned words will be forgotten when you press OK.";
         };
         AddRow(layout, learned, forget);
-        AddRow(layout, Label("Password managers are always excluded."));
+        AddRow(layout, Label(managed.AdditionalAlwaysExcluded.Count == 0
+            ? "Password managers are always excluded."
+            : $"Password managers and {managed.AdditionalAlwaysExcluded.Count} more app(s) are always excluded ({SetByOrganization}): {string.Join(", ", managed.AdditionalAlwaysExcluded)}."));
+        if (managed.DisableLoanwordSuggestions)
+        {
+            AddRow(layout, Label($"Loanword suggestions are off ({SetByOrganization})."));
+        }
 
         var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
         buttons.Controls.Add(cancel);
@@ -178,7 +200,8 @@ internal sealed class SettingsForm : Form
 
     private AppSettings Collect(AppSettings original) => new()
     {
-        Enabled = _enabled.Checked,
+        // Values set by policy keep the user's own choice underneath, for when the policy goes away.
+        Enabled = _managed.Enabled is null ? _enabled.Checked : original.Enabled,
         CorrectOnEnterAndTab = _correctOnEnter.Checked,
         FlashOnCorrection = _flash.Checked,
         FixAccidentalCapsLock = _capsLock.Checked,
@@ -186,6 +209,7 @@ internal sealed class SettingsForm : Form
         ConvertSelectionHotkey = HotkeyValue(HotkeyAction.ConvertSelection),
         ToggleHotkey = HotkeyValue(HotkeyAction.Toggle),
         FirstRunCompleted = original.FirstRunCompleted,
+        SuggestLoanwords = original.SuggestLoanwords,
         AlwaysConvertLearned = original.AlwaysConvertLearned,
         MinLength = (int)_minLength.Value,
         ReplaceThreshold = (double)_threshold.Value,
@@ -196,7 +220,7 @@ internal sealed class SettingsForm : Form
         LayoutSwitchSettleMs = original.LayoutSwitchSettleMs,
         NeverConvertLearned = original.NeverConvertLearned,
         NeverConvertKey = original.NeverConvertKey,
-        ExcludedProcesses = Lines(_excluded),
+        ExcludedProcesses = _managed.ExcludedProcesses is null ? Lines(_excluded) : original.ExcludedProcesses,
         NeverConvert = Lines(_neverConvert),
     };
 }

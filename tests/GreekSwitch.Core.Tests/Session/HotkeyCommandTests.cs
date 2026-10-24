@@ -36,6 +36,23 @@ public class HotkeyCommandTests(LanguageDataFixture data)
     }
 
     [Fact]
+    public void With_learning_disabled_convert_last_word_converts_but_learns_nothing()
+    {
+        var sim = new TypingSimulator(data);
+        sim.AlwaysConvert.LearningEnabled = false; // IT policy DisableUndoLearning
+        sim.NeverConvert.LearningEnabled = false;
+        sim.TypeIn(Lang.English, "den ");
+
+        sim.Session.ConvertLastWord().Should().BeTrue();
+        sim.Session.Reset();
+        sim.TypeIn(Lang.English, "den ");
+
+        sim.Screen.Should().Be("δεν den ", "nothing was learned, so the second one is kept as before");
+        sim.AlwaysConvert.LearnedCount.Should().Be(0);
+        sim.NeverConvert.LearnedCount.Should().Be(0);
+    }
+
+    [Fact]
     public void Converting_a_corrected_word_back_learns_never_to_convert_it()
     {
         var sim = new TypingSimulator(data).TypeIn(Lang.Greek, "αππλιψατιον ");
