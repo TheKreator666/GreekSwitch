@@ -87,6 +87,9 @@ public static class InputBuilder
         return [.. inputs];
     }
 
+    /// <summary>One key event with our signature.</summary>
+    public static INPUT Raw(ushort vk, ushort scan, uint flags) => Key(vk, scan, flags);
+
     private static void AddVirtualKey(List<INPUT> inputs, int vk, Func<int, ushort> scanCode)
     {
         var scan = scanCode(vk);

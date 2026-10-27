@@ -91,7 +91,28 @@ public sealed class GreekAccentTable : IGreekAccents
 
     public string Restore(string word)
     {
-        if (GreekText.StripDiacritics(word) != word || IsAllCaps(word)
+        // Leading and trailing marks stay as they are: the Greek question mark in "κανω;" is
+        // typed with Q, so it is part of the word's keys.
+        var start = 0;
+        var end = word.Length;
+        while (start < end && !char.IsLetter(word[start]))
+        {
+            start++;
+        }
+
+        while (end > start && !char.IsLetter(word[end - 1]))
+        {
+            end--;
+        }
+
+        return start == 0 && end == word.Length
+            ? RestoreLetters(word)
+            : word[..start] + RestoreLetters(word[start..end]) + word[end..];
+    }
+
+    private string RestoreLetters(string word)
+    {
+        if (word.Length == 0 || GreekText.StripDiacritics(word) != word || IsAllCaps(word)
             || !_spellings.TryGetValue(GreekText.NormalizeForMatch(word), out var spelling) || spelling.Length != word.Length)
         {
             return word;

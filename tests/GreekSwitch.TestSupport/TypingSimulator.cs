@@ -106,6 +106,9 @@ public sealed class TypingSimulator : ICorrectionOutput, ISuggestionSink
 
     public int Replacements { get; private set; }
 
+    /// <summary>The text the last replacement deleted (what it expected before the caret).</summary>
+    public string? LastReplaced { get; private set; }
+
     public string Screen => _committed + _decoder.Decode(_pending, ActiveLayout);
 
     /// <summary>
@@ -216,6 +219,17 @@ public sealed class TypingSimulator : ICorrectionOutput, ISuggestionSink
 
     public TypingSimulator Backspace() => Press(new KeyInput(VirtualKeys.Back));
 
+    /// <summary>The user stops typing for a moment (the worker then calls the session's OnPause).</summary>
+    public TypingSimulator Pause()
+    {
+        if (Session.AccentsPending)
+        {
+            Session.OnPause();
+        }
+
+        return this;
+    }
+
     public TypingSimulator Press(KeyInput key)
     {
         ApplyToScreen(key);
@@ -241,6 +255,8 @@ public sealed class TypingSimulator : ICorrectionOutput, ISuggestionSink
         {
             throw new InvalidOperationException($"Replace expected \"{before}\" before the caret, but the screen ends with \"{_committed}\".");
         }
+
+        LastReplaced = before;
 
         var backspaces = before.Length;
         var text = after;

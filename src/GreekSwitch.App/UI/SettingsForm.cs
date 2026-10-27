@@ -17,6 +17,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _correctOnEnter = new() { Text = "Also correct words ended by Enter or &Tab", AutoSize = true };
     private readonly CheckBox _flash = new() { Text = "&Flash the tray icon when a word is corrected", AutoSize = true };
     private readonly CheckBox _capsLock = new() { Text = "Fix words typed with &Caps Lock on by accident (hELLO → Hello)", AutoSize = true };
+    private readonly CheckBox _accents = new() { Text = "Add missing Greek &accents (ειναι → είναι)", AutoSize = true };
     private readonly Dictionary<HotkeyAction, TextBox> _hotkeys = Enum.GetValues<HotkeyAction>().ToDictionary(a => a, _ => new TextBox { Width = 200 });
     private readonly NumericUpDown _minLength = new() { Minimum = 1, Maximum = 20, Width = 70 };
     private readonly NumericUpDown _threshold = new() { Minimum = 0, Maximum = 20, DecimalPlaces = 1, Increment = 0.5m, Width = 70 };
@@ -65,6 +66,7 @@ internal sealed class SettingsForm : Form
         _correctOnEnter.Checked = settings.CorrectOnEnterAndTab;
         _flash.Checked = settings.FlashOnCorrection;
         _capsLock.Checked = settings.FixAccidentalCapsLock;
+        _accents.Checked = settings.RestoreAccents;
         foreach (var (action, box) in _hotkeys)
         {
             box.Text = AppHotkeys.Text(settings, action);
@@ -103,6 +105,7 @@ internal sealed class SettingsForm : Form
         AddRow(layout, _correctOnEnter);
         AddRow(layout, _flash);
         AddRow(layout, _capsLock);
+        AddRow(layout, _accents);
         AddRow(layout, Label("Minimum word length (keys):"), _minLength);
         AddRow(layout, Label("Replace threshold (score margin):"), _threshold);
         foreach (var (action, box) in _hotkeys)
@@ -235,6 +238,7 @@ internal sealed class SettingsForm : Form
         CorrectOnEnterAndTab = _correctOnEnter.Checked,
         FlashOnCorrection = _flash.Checked,
         FixAccidentalCapsLock = _capsLock.Checked,
+        RestoreAccents = _accents.Checked,
         ConvertLastWordHotkey = HotkeyValue(HotkeyAction.ConvertLastWord),
         ConvertSelectionHotkey = HotkeyValue(HotkeyAction.ConvertSelection),
         ToggleHotkey = HotkeyValue(HotkeyAction.Toggle),

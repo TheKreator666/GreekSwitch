@@ -78,16 +78,20 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
   `AppSettings.AlwaysExcludedProcesses` (password managers) can't be overridden by settings.
 - `WordBuffer` wipes its array. Don't add state that keeps typed text beyond the current word,
   the single armed `UndoRecord`, the single pending suggestion (until the next key), the last
-  completed word (convert-last-word hotkey), and (milestone 11) the keys of the last few words of the current run.
+  completed word (convert-last-word hotkey), (milestone 11) the keys of the last few words of the current run,
+  the Greek text since the last pause (`AccentRun`, ≤ 16 words) and key events held during a send (`KeyHold`, ≤ 200 ms).
 - Keep the WER exclusion and the `DropUnusedWpfNatives` target: nothing is extracted to disk at run time.
 - Any change to what is captured, stored or logged updates `SECURITY.md` in the same commit.
 
 **Input safety**
 - The hook callback only reads key/modifier state, enqueues, and returns. No COM/UI Automation,
   no I/O, no locks, no waiting. Windows silently removes slow low-level hooks. The hook never
-  swallows keys, with one exception: a plain Tab (and its key-up) while a suggestion is visible,
-  decided by reading the single `SuggestionGate` flag. If the suggestion is gone when the worker
-  sees it, the worker sends the Tab on.
+  swallows keys, with two exceptions: a plain Tab (and its key-up) while a suggestion is visible,
+  decided by reading the single `SuggestionGate` flag (if the suggestion is gone when the worker
+  sees it, the worker sends the Tab on); and key events that arrive while a correction is being
+  sent (`KeyHold`: lock-free enqueue, replayed in order by the corrector, hard 200 ms cap).
+- Never retype while the user is typing when it can wait: missing accents are added at a pause
+  (`TypingSession.OnPause`), not per word. See `docs/accent-and-input-issues.md`.
 - Ignore events with `LLKHF_INJECTED` (our own output also carries `InputBuilder.Signature`).
 - A correction either happens completely or not at all. `Corrector.Replace` checks, in order:
   modifier held → focus moved → Enter/Tab into a command window → Shift held → switch layout

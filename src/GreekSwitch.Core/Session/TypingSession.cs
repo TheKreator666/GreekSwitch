@@ -14,6 +14,7 @@ namespace GreekSwitch.Core.Session;
 /// Kept Greek words are then checked for English loanwords (κοντέινερ → container), which are
 /// replaced (user pairs, strong matches) or suggested (Tab accepts). In suggest-only apps, layout
 /// corrections are suggested instead of made. A suggestion lives only until the next key.
+/// Greek typed without accents gets them at the next pause (<see cref="OnPause"/>).
 /// Single-threaded: call it only from the worker. Log events carry languages, lengths, counts
 /// and reasons, never text.
 /// </summary>
@@ -35,6 +36,7 @@ public sealed class TypingSession
     private LastWord? _last;
     private PendingSuggestion? _pending;
     private bool _skipLoanwordOnce;
+    private readonly AccentRun _accentRun = new();
 
     public TypingSession(
         DecisionEngine engine,
@@ -109,6 +111,7 @@ public sealed class TypingSession
                 if (!_buffer.Pop())
                 {
                     _run.Clear(); // deleted into text before the word: the run no longer matches the screen
+                    _accentRun.Clear();
                     ClearLast();
                 }
 
@@ -131,6 +134,7 @@ public sealed class TypingSession
         ClearSuggestion();
         _buffer.MarkTainted();
         _run.Clear();
+        _accentRun.Clear();
         ClearLast();
         _undo.Disarm();
     }
@@ -189,6 +193,7 @@ public sealed class TypingSession
         }
 
         _run.Clear();
+        _accentRun.Clear();
         _undo.Disarm();
         if (inProgress)
         {
@@ -239,6 +244,7 @@ public sealed class TypingSession
         }
 
         _run.Clear();
+        _accentRun.Clear();
         ClearLast();
         _undo.Arm(pending.Undo);
         Corrected?.Invoke(this, EventArgs.Empty);
@@ -256,6 +262,7 @@ public sealed class TypingSession
         _skipLoanwordOnce = false;
         _buffer.Reset();
         _run.Clear();
+        _accentRun.Clear();
         ClearLast();
         _undo.Disarm();
     }
@@ -268,6 +275,15 @@ public sealed class TypingSession
         {
             _run.Clear(); // two delimiters in a row, or Enter/Tab: the run ends
             ClearLast();  // and the last word isn't safe to retype (Enter may have sent it)
+            if (word is null && delimiter.Kind is DelimiterKind.Space or DelimiterKind.Punctuation)
+            {
+                _accentRun.AddFixed(delimiter.Text); // "ειναι, " is still one stretch of text
+            }
+            else
+            {
+                _accentRun.Clear(); // never retype Enter or Tab
+            }
+
             return;
         }
 
@@ -296,6 +312,7 @@ public sealed class TypingSession
         else
         {
             _logger.LogDebug("Word kept, reason {Reason}, length {Length}", ((Keep)decision).Reason, word.Keys.Count);
+            TrackAccents(word, (Keep)decision, delimiter);
             var reconsiderable = !word.Tainted && !word.MixedLayout && delimiter.Kind == DelimiterKind.Space;
             if (reconsiderable)
             {
@@ -324,6 +341,63 @@ public sealed class TypingSession
         {
             _run.Clear(); // punctuation ends the run
         }
+    }
+
+    /// <summary>
+    /// Words waiting for their accents, and nothing being typed: the worker calls
+    /// <see cref="OnPause"/> once the user has stopped typing for a moment.
+    /// </summary>
+    public bool AccentsPending => _accentRun.HasChanges && _buffer.IsEmpty;
+
+    /// <summary>
+    /// The user stopped typing: give the Greek words typed since the last pause their accents
+    /// (ειναι πολυ → είναι πολύ), retyping the stretch from the first word that changes, with the
+    /// usual guards. Done at a pause rather than after each word because a correction typed
+    /// while the user keeps typing can lose letters. Not undone by Backspace: after a pause the
+    /// user's Backspace is meant for the text.
+    /// </summary>
+    public void OnPause()
+    {
+        if (!_options.RestoreAccents || _suggestOnly || _pending is not null || !_buffer.IsEmpty || _accentRun.Span() is not { } span)
+        {
+            return;
+        }
+
+        _accentRun.Clear();
+        if (!_output.Replace(span.Original, span.Replacement, Lang.Greek))
+        {
+            _logger.LogInformation("Accents not added, words {Words}", span.Words);
+            return;
+        }
+
+        _run.Clear();
+        ClearLast(); // the screen no longer shows the keys' reading
+        _undo.Disarm();
+        _logger.LogInformation("Accents added, words {Words}, length {Length}", span.Words, span.Replacement.Length);
+#if DEBUG
+        if (_options.DebugLogText)
+        {
+            _logger.LogDebug("[debug text] {Original} → {Text}", span.Original, span.Replacement);
+        }
+#endif
+        Corrected?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// A kept word joins the text waiting for accents. Greek-layout words only: Greek keys can't
+    /// retype Latin letters, so a word in the English layout ends the stretch.
+    /// </summary>
+    private void TrackAccents(CompletedWord word, Keep keep, Delimiter delimiter)
+    {
+        if (word.Layout != Lang.Greek || word.Tainted || word.MixedLayout)
+        {
+            _accentRun.Clear();
+            return;
+        }
+
+        var shown = _engine.Display(word.Keys, word.Layout, word.Layout);
+        var accented = keep.Reason is KeepReason.Plausible or KeepReason.TooShort ? _engine.WithAccents(shown) : shown;
+        _accentRun.Add(shown + delimiter.Text, accented + delimiter.Text);
     }
 
     /// <summary>A kept Greek word that may be an English word in Greek letters: replace it (tiers 1–2) or suggest it.</summary>
@@ -360,6 +434,7 @@ public sealed class TypingSession
                 }
 
                 _run.Clear();
+                _accentRun.Clear(); // Latin letters now: Greek keys can't retype them
                 ClearLast();
                 _undo.Arm(undo);
                 _logger.LogInformation("Loanword replaced, tier {Tier}, length {Length}", (int)replace.Tier, replace.Target.Length);
@@ -379,6 +454,7 @@ public sealed class TypingSession
     private void SuggestLayout(CompletedWord word, Replace replace, Delimiter delimiter)
     {
         _run.Clear();
+        _accentRun.Clear();
         SetLast(word.Keys, word.Layout, word.Layout, delimiter.Text);
         if (replace.TurnOffCapsLock)
         {
@@ -436,6 +512,7 @@ public sealed class TypingSession
         {
             _logger.LogInformation("Replacement not applied, lang {From}→{To}", replace.SourceLayout.Code(), replace.TargetLayout.Code());
             _run.Clear();
+            _accentRun.Clear();
             SetLast(word.Keys, word.Layout, word.Layout, delimiter.Text);
             return;
         }
@@ -443,6 +520,17 @@ public sealed class TypingSession
         if (replace.TurnOffCapsLock)
         {
             _output.TurnOffCapsLock();
+        }
+
+        // A Greek replacement already has its accents and stays part of the stretch; earlier
+        // words changing too, or English text, end it.
+        if (replace.TargetLayout == Lang.Greek && earlier.Count == 0)
+        {
+            _accentRun.AddFixed(replace.Text + delimiter.Text);
+        }
+        else
+        {
+            _accentRun.Clear();
         }
 
         for (var i = first; i < _run.Words.Count; i++)
@@ -508,6 +596,7 @@ public sealed class TypingSession
     private void Revert(UndoRecord undo)
     {
         _run.Clear();
+        _accentRun.Clear();
         ClearLast();
         if (!_output.Replace(undo.Replacement, undo.Original, undo.OriginalLayout))
         {

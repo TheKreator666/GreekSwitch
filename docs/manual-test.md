@@ -172,6 +172,14 @@ test mode; see the comment at the top of its `Program.cs`. It doesn't replace th
 - [ ] **Flash:** a correction flashes the tray icon green; with *Flash* unticked in Settings, it doesn't.
 - [ ] **Accidental Caps Lock** (tick it in Settings): with Caps Lock on, type `hELLO ` (Shift on
       the first letter). It becomes `Hello ` and Caps Lock is off. Unticked (the default), it stays.
+- [ ] **Missing accents**, in Notepad and in Word:
+      - Greek layout: type `ειναι πολυ ωραιο ` without the `;` key. It becomes `είναι πολύ ωραίο `.
+      - English layout: type `poy ua kanei prajeis `. The result is `που θα κάνει πράξεις ` (the
+        layout switches after `poy`; keep typing the same keys).
+      - Nothing changes while you keep typing; the accents appear about half a second after you stop.
+      - Type a long Greek sentence quickly without stopping: no letter is lost or moved.
+      - `ΕΙΝΑΙ ` and `και ` stay as typed.
+      - With *Add missing Greek accents* unticked, `ειναι ` stays.
 
 ## 12. Office deployment (milestone 14)
 

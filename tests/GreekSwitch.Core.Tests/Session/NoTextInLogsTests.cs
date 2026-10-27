@@ -28,4 +28,20 @@ public class NoTextInLogsTests(LanguageDataFixture data)
             log.Should().NotContainEquivalentOf(word, $"the log must not contain the typed word \"{word}\"");
         }
     }
+
+    [Fact]
+    public void Accent_path_logs_events_but_never_the_words()
+    {
+        var sim = new TypingSimulator(data, session: new() { RestoreAccents = true });
+        sim.TypeIn(Lang.Greek, "ειναι πολυ ").Pause();   // accents added
+        sim.RefuseReplacements = true;
+        sim.TypeIn(Lang.Greek, "ωραιο ").Pause();        // a guard refused them
+
+        var log = sim.Logger.AllOutput;
+        log.Should().Contain("Accents added").And.Contain("Accents not added");
+        foreach (var word in new[] { "ειναι", "είναι", "πολυ", "πολύ", "ωραιο", "ωραίο" })
+        {
+            log.Should().NotContainEquivalentOf(word, $"the log must not contain the typed word \"{word}\"");
+        }
+    }
 }

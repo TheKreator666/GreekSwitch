@@ -55,6 +55,7 @@ public sealed class Corrector : ICorrectionOutput
     private readonly Func<nint> _currentFocus;
     private readonly Func<nint, bool> _isCommandWindow;
     private readonly ITextVerifier _textVerifier;
+    private readonly KeyHold _hold;
     private readonly TimeSpan _timeout;
 
     public Corrector(
@@ -69,8 +70,10 @@ public sealed class Corrector : ICorrectionOutput
         TimeSpan? timeout = null,
         Func<nint>? currentFocus = null,
         Func<nint, bool>? isCommandWindow = null,
-        ITextVerifier? textVerifier = null)
+        ITextVerifier? textVerifier = null,
+        KeyHold? hold = null)
     {
+        _hold = hold ?? new KeyHold();
         _layouts = layouts;
         _maps = maps;
         _typeAhead = typeAhead;
@@ -154,7 +157,7 @@ public sealed class Corrector : ICorrectionOutput
         }
 
         var inputs = keys is null ? InputBuilder.Build(backspaces, text) : InputBuilder.BuildKeys(backspaces, keys, _scanCode);
-        var sent = _sender.Send(inputs);
+        var sent = SendHoldingUserKeys(inputs);
         if (sent != inputs.Length)
         {
             // Typically UIPI: the target runs elevated and we don't.
@@ -163,6 +166,52 @@ public sealed class Corrector : ICorrectionOutput
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Sends the batch while the hook holds back the user's keys (with our hook installed,
+    /// SendInput is not atomic: a key pressed meanwhile would land inside the correction), then
+    /// replays the held keys in the order they were pressed.
+    /// </summary>
+    private uint SendHoldingUserKeys(INPUT[] inputs)
+    {
+        _hold.Begin();
+        var held = 0;
+        try
+        {
+            return _sender.Send(inputs);
+        }
+        finally
+        {
+            // Still holding while replaying, so keys pressed meanwhile queue up behind these.
+            for (var keys = _hold.Drain(); keys.Count > 0; keys = _hold.Drain())
+            {
+                held += Replay(keys);
+            }
+
+            _hold.End();
+            held += Replay(_hold.Drain()); // pressed between the last drain and the end
+            if (held > 0)
+            {
+                _logger.LogDebug("Keys held during a correction and replayed after it: {Count}", held);
+            }
+        }
+    }
+
+    private int Replay(List<HeldKey> keys)
+    {
+        if (keys.Count == 0)
+        {
+            return 0;
+        }
+
+        var inputs = KeyHold.ToInputs(keys);
+        if (_sender.Send(inputs) != inputs.Length)
+        {
+            _logger.LogWarning("Keys held during a correction could not all be replayed");
+        }
+
+        return keys.Count;
     }
 
     public void TurnOffCapsLock()

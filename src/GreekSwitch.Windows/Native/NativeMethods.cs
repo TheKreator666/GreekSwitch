@@ -24,6 +24,7 @@ internal static partial class NativeMethods
     public const uint WM_QUIT = 0x0012;
     public const uint WM_INPUTLANGCHANGEREQUEST = 0x0050;
 
+    public const uint LLKHF_EXTENDED = 0x01;
     public const uint LLKHF_INJECTED = 0x10;
     public const uint LLKHF_ALTDOWN = 0x20;
 
@@ -33,6 +34,7 @@ internal static partial class NativeMethods
     public const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
 
     public const uint INPUT_KEYBOARD = 1;
+    public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     public const uint KEYEVENTF_KEYUP = 0x0002;
     public const uint KEYEVENTF_UNICODE = 0x0004;
 

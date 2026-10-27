@@ -155,7 +155,8 @@ internal sealed class GreekSwitchHost : IDisposable
             monitor.Keyboard,
             logger,
             monitor.Focus,
-            textVerifier: new UiaTextVerifier(uia))
+            textVerifier: new UiaTextVerifier(uia),
+            hold: monitor.Hold)
         {
             SwitchSettle = TimeSpan.FromMilliseconds(Math.Clamp(settings.LayoutSwitchSettleMs, 0, 250)),
         };
@@ -267,6 +268,7 @@ internal sealed class GreekSwitchHost : IDisposable
         CorrectOnEnterAndTab = s.CorrectOnEnterAndTab,
         HotkeyChords = [.. AppHotkeys.Parse(s).Values],
         SuggestLoanwords = managed.EffectiveSuggestLoanwords(s),
+        RestoreAccents = s.RestoreAccents,
         LearnLoanwords = !managed.DisableUndoLearning,
         DebugLogText = s.DebugLogText,
     };

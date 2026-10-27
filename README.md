@@ -80,6 +80,23 @@ The convert hotkeys do nothing where GreekSwitch is passive (password fields, pa
 managers, excluded apps, while disabled or paused). Convert selection is never used in a
 terminal, where Ctrl+C would interrupt the running command.
 
+## Missing Greek accents
+
+Greek typed without the tonos key gets its accents: `ειναι πολυ ωραιο` → `είναι πολύ ωραίο`.
+A word typed in the English layout (`kanei`) is converted with its accents at once (`κάνει`).
+Greek typed in the Greek layout without accents gets them **when you pause** (about half a
+second without a key), all the words since the last pause in one go. This avoids retyping
+while you type, which can lose letters (see [docs/accent-and-input-issues.md](docs/accent-and-input-issues.md)).
+An English word, Enter, a click or a Backspace into earlier text ends the stretch: the Greek
+words before it stay as typed. Backspace after a pause edits the text as usual (Ctrl+Z in the
+app undoes the accents). Not in suggest-only apps.
+
+The accented spelling comes from the most frequent spellings of about 38,000 Greek words
+(wordfreq). When two spellings differ only in the accent, the more frequent one wins: `αλλα`
+becomes `αλλά`, never `άλλα`. Words whose usual spelling has no accent (`και`, `που`, `μια`),
+words that already have an accent, and ALL-CAPS words are left alone. Rarer forms that aren't
+in the list stay as typed. Turn it off with *Add missing Greek accents* in Settings.
+
 ## Loanword suggestions
 
 Greeks often write English words in Greek letters: `κοντέινερ`, `κομπιούτερ`, `σέρβερ`. That's not
@@ -124,6 +141,7 @@ hand while GreekSwitch is closed:
 | `convertLastWordHotkey` / `convertSelectionHotkey` / `toggleHotkey` | `Ctrl+Alt+Space` / `Ctrl+Alt+Shift+Space` / `Ctrl+Alt+Shift+G` | The hotkeys (see *Hotkeys*). Empty turns one off. |
 | `flashOnCorrection` | `true` | Flash the tray icon green for a moment after a correction. |
 | `fixAccidentalCapsLock` | `false` | A word typed with Caps Lock on by accident (`hELLO`) becomes `Hello`, and Caps Lock is turned off. |
+| `restoreAccents` | `true` | Add the accents to Greek words typed without them (`ειναι` → `είναι`; see *Missing Greek accents*). Words converted from the wrong layout get their accents either way. |
 | `suggestLoanwords` | `true` | Suggest the English spelling of loanwords typed in Greek (`κοντέινερ` → `container`; see *Loanword suggestions*). The policy `DisableLoanwordSuggestions` forces it off. |
 | `autoReplaceLoanwords` | `false` | Also replace clear tech terms automatically when the Greek spelling isn't a Greek word (`ντεπλόι` → `deploy`). |
 | `loanwordPairs` | `[]` | Pairs you typed into Settings (`{ "greek": "κοντέινερ", "target": "container" }`), always replaced. |

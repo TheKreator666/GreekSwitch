@@ -24,6 +24,13 @@ public class GreekAccentTableTests
     public void Leaves_other_words_alone(string word) =>
         _table.Restore(word).Should().Be(word);
 
+    [Theory]
+    [InlineData("κανει;", "κάνει;")]     // the Greek question mark is typed with Q, inside the word
+    [InlineData("«κανει»", "«κάνει»")]
+    [InlineData(";", ";")]
+    public void Leaves_surrounding_marks_as_they_are(string word, string expected) =>
+        _table.Restore(word).Should().Be(expected);
+
     [Fact]
     public void Keeps_the_words_own_sigma() =>
         _table.Restore("πραξεισ").Should().Be("πράξεισ");

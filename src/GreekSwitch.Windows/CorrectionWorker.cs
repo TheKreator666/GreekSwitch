@@ -57,22 +57,51 @@ public sealed class CorrectionWorker
         _logger = logger;
     }
 
+    /// <summary>No key for this long while accents are pending: the user paused, so add them.</summary>
+    public static readonly TimeSpan PauseBeforeAccents = TimeSpan.FromMilliseconds(500);
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         OnForegroundChanged(GetForegroundWindow());
-        await foreach (var input in _monitor.Events.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        var reader = _monitor.Events;
+        Task<bool>? next = null; // one outstanding wait at a time (single-reader channel)
+        while (true)
         {
-            try
+            next ??= reader.WaitToReadAsync(cancellationToken).AsTask();
+            if (_session.AccentsPending
+                && await Task.WhenAny(next, Task.Delay(PauseBeforeAccents, cancellationToken)).ConfigureAwait(false) != next
+                && !cancellationToken.IsCancellationRequested)
             {
-                Handle(input);
+                Run(_session.OnPause);
+                continue;
             }
+
+            if (!await next.ConfigureAwait(false))
+            {
+                return; // the channel was completed
+            }
+
+            next = null;
+            while (reader.TryRead(out var input))
+            {
+                Run(() => Handle(input));
+            }
+        }
+    }
+
+    /// <summary>Runs one step of the pipeline; a failure is logged and the session reset.</summary>
+    private void Run(Action step)
+    {
+        try
+        {
+            step();
+        }
 #pragma warning disable CA1031 // keep the pipeline alive; the failure is logged, not swallowed
-            catch (Exception ex)
+        catch (Exception ex)
 #pragma warning restore CA1031
-            {
-                _logger.LogError("Pipeline failed: {Type}{NewLine}{Stack}", ex.GetType().FullName, Environment.NewLine, ex.StackTrace);
-                _session.Reset();
-            }
+        {
+            _logger.LogError("Pipeline failed: {Type}{NewLine}{Stack}", ex.GetType().FullName, Environment.NewLine, ex.StackTrace);
+            _session.Reset();
         }
     }
 

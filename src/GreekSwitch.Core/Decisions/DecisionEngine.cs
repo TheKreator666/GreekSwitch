@@ -80,6 +80,9 @@ public sealed class DecisionEngine
         return shown != typedLayout && shown == Lang.Greek ? AsGreekReplacement(text) : text;
     }
 
+    /// <summary>Greek <paramref name="text"/> with its missing accents put back (ειναι → είναι), or unchanged.</summary>
+    public string WithAccents(string text) => _accents.Restore(text);
+
     /// <summary>A Greek reading as it is typed out when converted: final sigma fixed and missing accents put back.</summary>
     private string AsGreekReplacement(string reading) => _accents.Restore(GreekText.FixFinalSigma(reading));
 

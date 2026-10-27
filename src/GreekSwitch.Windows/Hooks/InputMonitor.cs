@@ -39,6 +39,9 @@ public sealed class InputMonitor : IDisposable
     /// <summary>Open while a loanword suggestion is visible: the hook then turns a plain Tab into an accept.</summary>
     public SuggestionGate Suggestion { get; } = new();
 
+    /// <summary>Holds the user's keys while a correction is being typed, for the corrector to replay.</summary>
+    public KeyHold Hold { get; } = new();
+
     /// <summary>
     /// Test mode for end-to-end runs: also process keys injected by *other* programs (our own
     /// output stays ignored). The app turns it on only in Debug builds, behind an environment variable.
@@ -117,7 +120,7 @@ public sealed class InputMonitor : IDisposable
 
     private void Run()
     {
-        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead, Keyboard, AcceptForeignInjectedInput, () => Interlocked.Increment(ref _droppedKeys), Activity, Suggestion);
+        using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead, Keyboard, AcceptForeignInjectedInput, () => Interlocked.Increment(ref _droppedKeys), Activity, Suggestion, Hold);
         using var mouse = new MouseHook(_channel.Writer, Activity);
         using var focus = new FocusWatcher(_channel.Writer);
         try

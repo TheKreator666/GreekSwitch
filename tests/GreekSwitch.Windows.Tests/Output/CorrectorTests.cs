@@ -33,6 +33,38 @@ public class CorrectorTests
         _focus.Expect(0x100); // the word was typed into window 0x100
     }
 
+    private readonly KeyHold _hold = new();
+
+    /// <summary>
+    /// With a low-level hook installed SendInput isn't atomic: a key pressed during the send
+    /// would land inside the correction. The hook holds it, and the corrector replays it after.
+    /// </summary>
+    [Fact]
+    public void Keys_pressed_while_the_correction_is_sent_are_replayed_after_it()
+    {
+        var pressed = new HeldKey(0x4B, 0x25, Extended: false, Up: false);
+        _sender.DuringSend = () => _hold.TryHold(pressed).Should().BeTrue("the hook holds it");
+
+        Create().Replace("δουλευει ", "δουλεύει ", Lang.Greek).Should().BeTrue();
+
+        _sender.Batches.Should().HaveCount(2, "the correction, then the held key");
+        var replay = _sender.Batches[1].Single();
+        replay.U.ki.wVk.Should().Be(0x4B);
+        replay.U.ki.dwExtraInfo.Should().Be(InputBuilder.Signature, "the hook ignores our own replay");
+        _hold.TryHold(pressed).Should().BeFalse("holding ends with the correction");
+    }
+
+    [Fact]
+    public void Held_keys_are_replayed_even_if_the_correction_could_not_be_sent()
+    {
+        _sender.Blocked = true;
+        _sender.DuringSend = () => _hold.TryHold(new HeldKey(0x4B, 0x25, false, false));
+
+        Create().Replace("δουλευει ", "δουλεύει ", Lang.Greek).Should().BeFalse();
+
+        _sender.Attempts.Should().Be(2, "the user's key is never lost");
+    }
+
     private Corrector Create(TimeSpan? timeout = null) => new(
         _layouts,
         StaticLayouts.For,
@@ -45,7 +77,8 @@ public class CorrectorTests
         timeout ?? TimeSpan.FromMilliseconds(200),
         () => _currentFocus,
         _ => _commandWindow,
-        new FakeVerifier(this));
+        new FakeVerifier(this),
+        _hold);
 
     [Fact]
     public void Types_nothing_if_the_text_before_the_caret_was_changed_by_another_tool()
@@ -376,8 +409,20 @@ public class CorrectorTests
 
         public List<Lang> LayoutAtSend { get; } = [];
 
+        /// <summary>Runs inside the first Send, as a key the user presses mid-send would.</summary>
+        public Action? DuringSend { get; set; }
+
+        public int Attempts { get; private set; }
+
         public uint Send(INPUT[] inputs)
         {
+            Attempts++;
+            if (DuringSend is { } during)
+            {
+                DuringSend = null;
+                during();
+            }
+
             if (Blocked)
             {
                 return 0;

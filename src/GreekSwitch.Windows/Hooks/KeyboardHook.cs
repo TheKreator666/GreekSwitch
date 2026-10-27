@@ -13,8 +13,10 @@ namespace GreekSwitch.Windows.Hooks;
 /// WH_KEYBOARD_LL hook. The callback only reads the key and the modifier state and enqueues
 /// them: Windows silently removes low-level hooks that are slow to return. Injected events,
 /// including our own SendInput output, are ignored. Install it on a thread that runs a message loop.
-/// It never swallows a key, with one exception: Tab (no modifiers) while a loanword suggestion is
-/// visible, decided by reading one flag (<see cref="SuggestionGate"/>).
+/// It never swallows a key, with two exceptions: Tab (no modifiers) while a loanword suggestion is
+/// visible, decided by reading one flag (<see cref="SuggestionGate"/>); and keys pressed during
+/// the few milliseconds a correction is being typed, which are held and replayed right after it
+/// (<see cref="KeyHold"/>, at most 200 ms).
 /// </summary>
 internal sealed class KeyboardHook : IDisposable
 {
@@ -28,6 +30,7 @@ internal sealed class KeyboardHook : IDisposable
     private nint _hook;
     private readonly LiveKeyboardState _keyboard;
     private readonly SuggestionGate _suggestion;
+    private readonly KeyHold _hold;
     private bool _capsLock;
     private bool _swallowTabUp;
 
@@ -39,9 +42,11 @@ internal sealed class KeyboardHook : IDisposable
         bool acceptForeignInjected = false,
         Action? keyDropped = null,
         Health.HookActivity? activity = null,
-        SuggestionGate? suggestion = null)
+        SuggestionGate? suggestion = null,
+        KeyHold? hold = null)
     {
         _suggestion = suggestion ?? new SuggestionGate();
+        _hold = hold ?? new KeyHold();
         _writer = writer;
         _captureKeys = captureKeys;
         _typeAhead = typeAhead;
@@ -141,6 +146,23 @@ internal sealed class KeyboardHook : IDisposable
             {
                 _swallowTabUp = false;
                 return 1;
+            }
+
+            // A correction is being typed: hold back every key event that isn't ours (it has
+            // already been queued for the worker above), so it can't land inside the correction.
+            // The corrector replays it right after. Ends by itself after KeyHold.Cap.
+            if (nCode == HC_ACTION && wParam is WM_KEYDOWN or WM_SYSKEYDOWN or WM_KEYUP or WM_SYSKEYUP)
+            {
+                var data = *(KBDLLHOOKSTRUCT*)lParam;
+                if (data.dwExtraInfo != InputBuilder.Signature
+                    && _hold.TryHold(new HeldKey(
+                        (ushort)data.vkCode,
+                        (ushort)data.scanCode,
+                        Extended: (data.flags & LLKHF_EXTENDED) != 0,
+                        Up: wParam is WM_KEYUP or WM_SYSKEYUP)))
+                {
+                    return 1;
+                }
             }
         }
 #pragma warning disable CA1031 // An exception must never cross back into user32; report it to the worker instead.

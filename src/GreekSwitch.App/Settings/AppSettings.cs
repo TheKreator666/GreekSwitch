@@ -77,6 +77,9 @@ internal sealed class AppSettings
     /// <summary>Fix words typed with Caps Lock on by accident ("hELLO" → "Hello") and turn Caps Lock off.</summary>
     public bool FixAccidentalCapsLock { get; set; }
 
+    /// <summary>Add the accents to Greek words typed without them (ειναι → είναι), in either layout.</summary>
+    public bool RestoreAccents { get; set; } = true;
+
     /// <summary>
     /// Suggest the English spelling of loanwords typed in Greek (κοντέινερ → container), milestone 15.
     /// The policy value DisableLoanwordSuggestions forces it off.
