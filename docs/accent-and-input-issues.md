@@ -1,4 +1,4 @@
-# Missing accents and lost letters: findings and status (2026-10-27)
+﻿# Missing accents and lost letters: findings and status (2026-10-27)
 
 Notes from one long debugging session, written to be picked up later. Short version: accents
 for Greek typed without the tonos key work in the simulator. In real apps, retyping a word while
@@ -101,6 +101,31 @@ Live result with accents at a pause (Notepad, same sentences):
 In the skipped lines, the screen had `πρόγραμμα`, `ένα`, `φορτωθεί` accented by the app
 (not by GreekSwitch). So the text check correctly refused to retype, and the other words stayed bare.
 
+## Issue D: Word's sentence-start capital blocked every correction (solved, 2026-10-27)
+
+First `--matrix` run (Windows 10, Word 32-bit, Notepad classic): Word 0/5. Word's AutoCorrect
+capitalises the first word of a sentence on Space (`ψονταινερ` → `Ψονταινερ`) before the
+correction arrives. The text check saw a mismatch and skipped it, both for layout corrections and
+for the accent batch at a pause (one capital cancelled the whole sentence). Fix:
+`UiaTextVerifier.Classify` returns `FirstLetterCapitalised` when the only difference is an
+upper-cased first letter, and `Corrector` then types the replacement with that capital
+(`Container`). Any other difference is still a mismatch. Word 0/5 → 4/5, the fifth is open issue 4.
+
+## Issue E: first word after a password field never judged (solved, 2026-10-27)
+
+Found in the same runs: a word typed right after leaving a password field was kept as
+`PartialWord`. Keys dropped while capture was off in the password field were counted against the
+next field, because capture was already off at the focus change. Focus events now carry the
+hook's dropped-key count (read on the hook thread when focus moved), and `MissedKeys` only counts
+keys dropped after it.
+
+## Issue F: nothing corrected in Chrome rich-text fields (solved, 2026-10-27)
+
+Chrome contenteditable (the editor of Gmail, Outlook and Teams on the web) 0/5: every correction
+and accent batch skipped by the text check. Chrome keeps a typed trailing space as a no-break
+space (U+00A0), so the text never ended with the typed word + space. `Classify` now reads a
+no-break space as a space (one Backspace deletes either). Chrome 0/5 → 4/5.
+
 ## Open issues
 
 1. **Who accents words after Space in Notepad?** With GreekSwitch stopped, `προγραμμα`,
@@ -117,13 +142,25 @@ In the skipped lines, the screen had `πρόγραμμα`, `ένα`, `φορτω
    differs from what was typed *only in accents*, accept the screen's version (keep the
    app's accents, add ours to the rest) instead of skipping. Needs the verifier to return the text
    (in memory only).
-4. **An English word ends the stretch.** Greek keys can't retype Latin letters. In
-   `θέλω να φτιαξω ενα application που θα κάνει πράξεις`, the words before `application` stay
-   unaccented. Idea: when the English word's own layout correction happens, first add the
-   pending accents in the Greek layout, then switch and type the English word (two-layout
-   correction).
-5. **Not yet tested outside Notepad.** `--matrix` is written and builds, but hasn't been run:
-   Notepad, Word, Edge (textarea), Chrome (contenteditable), Firefox. The cases are `container`
+4. **An English word ends the stretch (solved, 2026-10-27).** Greek keys can't retype Latin
+   letters, so in `θέλω να φτιαξω ενα application …` the words before `application` stayed
+   unaccented. A first fix added the pending accents in a separate correction just before the
+   word's conversion to English. Live it garbled the text (`να fti;ajv ;ena application`): a
+   layout switch requested right after SendInput is a posted message, and Windows hands posted
+   messages to the app *before* queued input, so the app switched to English and then read the
+   queued Greek keys as Latin letters. Waiting until the screen showed the accents fixed that but
+   lost the conversion to fast typing (`typing continued`) in Word and Chrome. Final fix: accents
+   are fixed **in place** at the pause (`Corrector.Retouch`): one batch, right to left, Left arrows
+   (extended keys, or Num Lock types digits) to each changed letter, Backspace, the accented
+   letter, then Right arrows back to the end. No layout switch; real keys when the Greek layout
+   is active, Unicode otherwise. English words, typed in either layout, stay in the stretch and
+   are never retyped.
+5. **`--matrix` results (2026-10-27, after issues D–F):** Notepad, Word, Edge (textarea),
+   Chrome (contenteditable) and Firefox (textarea) all 4/5; the fifth case everywhere is issue 4.
+   After issue 4 and Word's own accents (Reconcile): 25/25. WordCraft 0.11 (added later): all five
+   correct; it capitalises the sentence start like Word.
+   A window of the app under test that takes focus (Edge's extension page, Firefox at start-up)
+   now makes the driver retry the case; any other window still stops the run. The cases are `container`
    and `route survey` typed in the Greek layout, `doyleyei` typed in the English layout, a Greek
    sentence without accents, and the mixed sentence above. (`ρουτε` is a phonetic spelling,
    not a layout mistake. The Greek-layout keys for "route" give `ροθτε`.)

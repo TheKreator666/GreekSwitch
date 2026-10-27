@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using GreekSwitch.Windows.Native;
 using static GreekSwitch.Windows.Native.NativeMethods;
@@ -13,13 +13,16 @@ namespace GreekSwitch.Windows.Hooks;
 internal sealed class FocusWatcher : IDisposable
 {
     private readonly ChannelWriter<InputEvent> _writer;
+    private readonly Func<long> _droppedKeys;
     private readonly WinEventProc _proc;
     private nint _foregroundHook;
     private nint _focusHook;
 
-    public FocusWatcher(ChannelWriter<InputEvent> writer)
+    /// <param name="droppedKeys">The hook's dropped-key count, read on this (the hook) thread at each focus change.</param>
+    public FocusWatcher(ChannelWriter<InputEvent> writer, Func<long> droppedKeys)
     {
         _writer = writer;
+        _droppedKeys = droppedKeys;
         _proc = Callback;
     }
 
@@ -48,6 +51,7 @@ internal sealed class FocusWatcher : IDisposable
 
     private void Callback(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
     {
-        _writer.TryWrite(eventType == EVENT_SYSTEM_FOREGROUND ? InputEvent.Foreground(hwnd) : InputEvent.Focus(hwnd, idChild));
+        var dropped = _droppedKeys();
+        _writer.TryWrite(eventType == EVENT_SYSTEM_FOREGROUND ? InputEvent.Foreground(hwnd, dropped) : InputEvent.Focus(hwnd, idChild, dropped));
     }
 }

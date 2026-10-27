@@ -1,4 +1,4 @@
-# Manual test checklist
+﻿# Manual test checklist
 
 The hooks only react to real keyboard input (injected input is ignored by design), so these
 checks need a person at a keyboard. Run them on a clean Windows 10/11 x64 machine with the
@@ -178,6 +178,10 @@ test mode; see the comment at the top of its `Program.cs`. It doesn't replace th
         layout switches after `poy`; keep typing the same keys).
       - Nothing changes while you keep typing; the accents appear about half a second after you stop.
       - Type a long Greek sentence quickly without stopping: no letter is lost or moved.
+      - English layout: type `uelv na ftiajv ena application poy ua kanei prajeiw ` (all with the
+        same keys). After the pause: `θέλω να φτιάξω ένα application που θα κάνει πράξεις `, with
+        the caret back at the end and no stray `;` or Latin letters.
+      - With Num Lock on, the accents at a pause never type `4` or `6` (the caret moves with arrow keys).
       - `ΕΙΝΑΙ ` and `και ` stay as typed.
       - With *Add missing Greek accents* unticked, `ειναι ` stays.
 

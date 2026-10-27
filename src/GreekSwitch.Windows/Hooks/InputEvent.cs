@@ -1,4 +1,4 @@
-using GreekSwitch.Core;
+﻿using GreekSwitch.Core;
 using GreekSwitch.Core.Input;
 using GreekSwitch.Windows.Focus;
 using GreekSwitch.Windows.Layouts;
@@ -23,6 +23,7 @@ public enum InputEventKind
 /// <param name="Layout">For keys: the keyboard layout (HKL) of the focused window when the key was pressed.</param>
 /// <param name="ChildId">For focus events: the focused element's child id (0 = the window itself).</param>
 /// <param name="Check">For PasswordChecked: the answer, or null if UI Automation timed out.</param>
+/// <param name="DroppedKeys">For focus events: the hook's dropped-key count when focus moved.</param>
 public readonly record struct InputEvent(
     InputEventKind Kind,
     KeyInput Key = default,
@@ -31,7 +32,8 @@ public readonly record struct InputEvent(
     long TypedCount = 0,
     nint Layout = 0,
     int ChildId = 0,
-    PasswordCheck? Check = null)
+    PasswordCheck? Check = null,
+    long DroppedKeys = 0)
 {
     /// <param name="typedCount">TypeAheadGuard count when the key was captured.</param>
     /// <param name="focusWindow">The control that had keyboard focus when the key was pressed.</param>
@@ -47,9 +49,11 @@ public readonly record struct InputEvent(
 
     public static InputEvent Click() => new(InputEventKind.MouseClick);
 
-    public static InputEvent Foreground(nint hwnd) => new(InputEventKind.ForegroundChanged, Window: hwnd);
+    public static InputEvent Foreground(nint hwnd, long droppedKeys) =>
+        new(InputEventKind.ForegroundChanged, Window: hwnd, DroppedKeys: droppedKeys);
 
-    public static InputEvent Focus(nint hwnd, int childId) => new(InputEventKind.FocusChanged, Window: hwnd, ChildId: childId);
+    public static InputEvent Focus(nint hwnd, int childId, long droppedKeys) =>
+        new(InputEventKind.FocusChanged, Window: hwnd, ChildId: childId, DroppedKeys: droppedKeys);
 
     public static InputEvent PasswordChecked(FocusKey key, PasswordCheck? check) =>
         new(InputEventKind.PasswordChecked, Window: key.Window, ChildId: key.ChildId, Check: check);

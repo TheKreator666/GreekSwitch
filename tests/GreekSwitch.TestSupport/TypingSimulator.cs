@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using GreekSwitch.Core;
 using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Input;
@@ -240,10 +240,59 @@ public sealed class TypingSimulator : ICorrectionOutput, ISuggestionSink
     /// <summary>Make every Replace fail, as the Corrector does when a guard trips.</summary>
     public bool RefuseReplacements { get; set; }
 
+    public bool Retouch(string text, string replacement)
+    {
+        if (RefuseReplacements)
+        {
+            return false;
+        }
+
+        if (RefuseNextReplacements > 0)
+        {
+            RefuseNextReplacements--;
+            return false;
+        }
+
+        _committed.Append(_decoder.Decode(_pending, ActiveLayout));
+        _pending.Clear();
+        var screen = _committed.ToString();
+        if (text.Length != replacement.Length || !screen.EndsWith(text, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Retouch expected \"{text}\" before the caret, but the screen ends with \"{screen}\".");
+        }
+
+        // Only letters that differ are retyped: everything else must stay exactly as it is.
+        var start = screen.Length - text.Length;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] != replacement[i])
+            {
+                _committed[start + i] = replacement[i];
+                RetouchedLetters++;
+            }
+        }
+
+        LastReplaced = text;
+        Replacements++;
+        return true;
+    }
+
+    /// <summary>Letters changed in place by <see cref="Retouch"/>.</summary>
+    public int RetouchedLetters { get; private set; }
+
+    /// <summary>Make only the next <c>n</c> Replace calls fail (a guard tripping once).</summary>
+    public int RefuseNextReplacements { get; set; }
+
     public bool Replace(string before, string after, Lang layout)
     {
         if (RefuseReplacements)
         {
+            return false;
+        }
+
+        if (RefuseNextReplacements > 0)
+        {
+            RefuseNextReplacements--;
             return false;
         }
 

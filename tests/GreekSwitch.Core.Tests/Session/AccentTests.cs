@@ -1,4 +1,4 @@
-using GreekSwitch.Core.Session;
+﻿using GreekSwitch.Core.Session;
 using GreekSwitch.Core.Tests.Support;
 
 namespace GreekSwitch.Core.Tests.Session;
@@ -82,15 +82,6 @@ public class AccentTests(LanguageDataFixture data)
 
         sim.Session.AccentsPending.Should().BeFalse("the screen no longer matches what was typed");
         sim.Pause().Screen.Should().Be("ειναι"[..4]);
-    }
-
-    [Fact]
-    public void English_text_ends_the_stretch()
-    {
-        // Greek keys can't retype Latin letters: the Greek words before it stay as typed.
-        var sim = Sim(follow: false).TypeIn(Lang.Greek, "ειναι ").TypeIn(Lang.English, "ok ").Pause();
-
-        sim.Screen.Should().Be("ειναι ok ");
     }
 
     [Fact]

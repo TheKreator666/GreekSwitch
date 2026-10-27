@@ -1,4 +1,4 @@
-using GreekSwitch.Core;
+﻿using GreekSwitch.Core;
 using GreekSwitch.Core.Layout;
 using GreekSwitch.Windows.Native;
 using static GreekSwitch.Windows.Native.NativeMethods;
@@ -85,6 +85,23 @@ public static class InputBuilder
         }
 
         return [.. inputs];
+    }
+
+    /// <summary>
+    /// <paramref name="count"/> presses of an arrow key, as extended keys: without the flag the scan
+    /// code is the numpad's, which types a digit when Num Lock is on.
+    /// </summary>
+    public static INPUT[] Arrows(int vk, int count, Func<int, ushort> scanCode)
+    {
+        var inputs = new INPUT[count * 2];
+        var scan = scanCode(vk);
+        for (var i = 0; i < count; i++)
+        {
+            inputs[i * 2] = Key(vk, scan, KEYEVENTF_EXTENDEDKEY);
+            inputs[(i * 2) + 1] = Key(vk, scan, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP);
+        }
+
+        return inputs;
     }
 
     /// <summary>One key event with our signature.</summary>

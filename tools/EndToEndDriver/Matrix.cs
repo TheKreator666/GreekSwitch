@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using GreekSwitch.Core;
 
 /// <summary>
@@ -21,10 +21,19 @@ internal static class Matrix
         ("mixed sentence started in the English layout", Lang.English, "uelv na ftiajv ena application poy ua kanei prajeiw ", "θέλω να φτιάξω ένα application που θα κάνει πράξεις "),
     ];
 
-    private sealed record Target(string Name, Func<Process?> Start, Func<string?> Refuse);
+    /// <param name="ProcessName">The app's process: a window of its own that takes focus (an extension page,
+    /// a start-up prompt) is the app's business, not the user's, so the case is retried.</param>
+    private sealed record Target(string Name, string ProcessName, Func<Process?> Start, Func<string?> Refuse);
 
-    public static int Run(string workDir)
+    /// <param name="only">Names to run (e.g. "Chrome"), matched against the start of each target's name; empty runs all.</param>
+    public static int Run(string workDir, string[] only)
     {
+        if (MarkerWindows().Count > 0)
+        {
+            Console.Error.WriteLine($"A window with \"{Marker}\" in its title is already open (a previous run?): close it first.");
+            return 2;
+        }
+
         Directory.CreateDirectory(workDir);
         var text = Path.Combine(workDir, Marker + ".txt");
         var rtf = Path.Combine(workDir, Marker + ".rtf");
@@ -35,25 +44,38 @@ internal static class Matrix
         File.WriteAllText(textarea, $"<!doctype html><meta charset=utf-8><title>{Marker} textarea</title><textarea autofocus style='width:95%;height:80vh;font-size:20px'></textarea>");
         File.WriteAllText(editable, $"<!doctype html><meta charset=utf-8><title>{Marker} editable</title><div contenteditable style='width:95%;height:80vh;font-size:20px;border:1px solid' id=e></div><script>document.getElementById('e').focus()</script>");
 
-        var word = @"C:\Program Files\Microsoft Office\Root\Office16\WINWORD.EXE";
-        var edge = Environment.ExpandEnvironmentVariables(@"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe");
-        var chrome = Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\Google\Chrome\Application\chrome.exe");
-        var firefox = Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\Mozilla Firefox\firefox.exe");
+        var word = Find(@"Microsoft Office\Root\Office16\WINWORD.EXE");
+        var edge = Find(@"Microsoft\Edge\Application\msedge.exe");
+        var chrome = Find(@"Google\Chrome\Application\chrome.exe");
+        var firefox = Find(@"Mozilla Firefox\firefox.exe");
+        var wordcraft = Find(@"WordCraft\wordcraft.exe");
+        var docx = Path.Combine(workDir, Marker + ".docx");
+        const string BrowserFlags = "--no-first-run --no-default-browser-check --disable-extensions --new-window";
         string Profile(string name) => Directory.CreateDirectory(Path.Combine(workDir, "profile-" + name)).FullName;
 
         Target[] targets =
         [
-            new("Notepad", () => Process.Start("notepad.exe", Quote(text)), () => null),
-            new("Word", () => Process.Start(word, Quote(rtf)),
-                () => Process.GetProcessesByName("WINWORD").Length > 0 ? "Word is already open: close it to include Word" : null),
-            new("Edge, textarea", () => Process.Start(edge, $"--user-data-dir={Quote(Profile("edge"))} --no-first-run --no-default-browser-check --new-window {Quote(textarea)}"), () => null),
-            new("Chrome, contenteditable", () => Process.Start(chrome, $"--user-data-dir={Quote(Profile("chrome"))} --no-first-run --no-default-browser-check --new-window {Quote(editable)}"), () => null),
-            new("Firefox, textarea", () => Process.Start(firefox, $"-no-remote -profile {Quote(Profile("firefox"))} {Quote(textarea)}"), () => null),
+            new("Notepad", "notepad", () => Process.Start("notepad.exe", Quote(text)), () => null),
+            new("Word", "WINWORD", () => Process.Start(word!, Quote(rtf)),
+                () => word is null ? "not installed"
+                    : Process.GetProcessesByName("WINWORD").Length > 0 ? "Word is already open: close it to include Word" : null),
+            new("Edge, textarea", "msedge", () => Process.Start(edge!, $"--user-data-dir={Quote(Profile("edge"))} {BrowserFlags} {Quote(textarea)}"), () => edge is null ? "not installed" : null),
+            new("Chrome, contenteditable", "chrome", () => Process.Start(chrome!, $"--user-data-dir={Quote(Profile("chrome"))} {BrowserFlags} {Quote(editable)}"), () => chrome is null ? "not installed" : null),
+            new("Firefox, textarea", "firefox", () => Process.Start(firefox!, $"-no-remote -profile {Quote(Profile("firefox"))} {Quote(textarea)}"), () => firefox is null ? "not installed" : null),
+            new("WordCraft", "wordcraft", () => Process.Start(wordcraft!, Quote(NewDocx(wordcraft!, rtf, docx))),
+                () => wordcraft is null ? "not installed"
+                    : Process.GetProcessesByName("wordcraft").Length > 0 ? "WordCraft is already open: close it to include it" : null),
         ];
 
         var summary = new List<string>();
+        var stopped = false;
         foreach (var target in targets)
         {
+            if (only.Length > 0 && !only.Any(o => target.Name.StartsWith(o, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
             if (target.Refuse() is { } reason)
             {
                 summary.Add($"{target.Name}: skipped ({reason})");
@@ -77,10 +99,28 @@ internal static class Matrix
                 Program.MarkLog();
                 foreach (var (name, layout, keys, expected) in Cases)
                 {
-                    Program.Type(layout, keys, 120);
-                    Thread.Sleep(1500); // a pause: accents are added now
-                    var actual = Program.ReadAndClearText().Replace("\r\n", "\n").TrimEnd('\r', '\n');
-                    Program.Expect($"{target.Name}: {name}", actual, expected.TrimEnd());
+                    string actual;
+                    try
+                    {
+                        actual = TypeCase(layout, keys);
+                    }
+                    catch (Exception e) when (Program.IsFocusLost(e) && OwnWindowInFront(target))
+                    {
+                        // The app's own window took focus: bring the test window back, start the case again.
+                        Console.WriteLine($"    ({target.Name}'s own window [{Program.ForegroundTitle()}] took focus; retrying the case)");
+                        Program.ReleaseModifiers();
+                        if (!WaitForMarkerInFront(TimeSpan.FromSeconds(15)))
+                        {
+                            throw;
+                        }
+
+                        _ = Program.ReadAndClearText();
+                        actual = TypeCase(layout, keys);
+                    }
+
+                    // Each case starts an empty document: word processors capitalise the first word.
+                    var want = target.Name is "Word" or "WordCraft" ? char.ToUpperInvariant(expected[0]) + expected[1..] : expected;
+                    Program.Expect($"{target.Name}: {name}", actual, want.TrimEnd());
                 }
 
                 summary.Add($"{target.Name}: {Cases.Length - (Program.Failures - failuresBefore)}/{Cases.Length} OK");
@@ -88,7 +128,8 @@ internal static class Matrix
             catch (Exception e) when (Program.IsFocusLost(e))
             {
                 summary.Add($"{target.Name}: stopped, the test window lost focus (no further keys sent)");
-                Console.Error.WriteLine("Stopped: the test window is no longer in front. No further keys were sent.");
+                Console.Error.WriteLine($"Stopped: the test window is no longer in front ([{Program.ForegroundTitle()}] is). No further keys were sent.");
+                stopped = true;
                 break; // the user may be using the PC: stop the whole run
             }
             finally
@@ -102,8 +143,18 @@ internal static class Matrix
         Console.WriteLine();
         Console.WriteLine("===== Summary");
         summary.ForEach(Console.WriteLine);
-        return Program.Failures == 0 ? 0 : 1;
+        return Program.Failures == 0 && !stopped ? 0 : 1; // an interrupted run is not a pass
     }
+
+    private static string TypeCase(Lang layout, string keys)
+    {
+        Program.Type(layout, keys, 120);
+        Thread.Sleep(1500); // a pause: accents are added now
+        return Program.ReadAndClearText().Replace("\r\n", "\n").TrimEnd(); // the expected text is trimmed too
+    }
+
+    private static bool OwnWindowInFront(Target target) =>
+        string.Equals(Program.ForegroundProcessName(), target.ProcessName, StringComparison.OrdinalIgnoreCase);
 
     private static bool WaitForMarkerInFront(TimeSpan timeout)
     {
@@ -154,6 +205,13 @@ internal static class Matrix
                     p.Kill(); // only ever ours: the run refuses to start Word when it's already open
                 }
             }
+            else if (name == "WordCraft")
+            {
+                foreach (var p in Process.GetProcessesByName("wordcraft"))
+                {
+                    p.Kill(); // only ever ours: the run refuses to start it when it's already open
+                }
+            }
             else if (started is { HasExited: false })
             {
                 started.Kill(entireProcessTree: true); // the throwaway-profile browser only
@@ -164,7 +222,49 @@ internal static class Matrix
         }
 
         Thread.Sleep(1500);
+
+        // Firefox hands its window to another process, which outlives the one we started. Only
+        // test windows carry the marker, so whatever still shows it is ours to close.
+        foreach (var p in MarkerWindows())
+        {
+            try
+            {
+                p.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+    }
+
+    /// <summary>Processes whose main window carries the test marker.</summary>
+    private static List<Process> MarkerWindows() =>
+        [.. Process.GetProcesses().Where(p =>
+        {
+            try
+            {
+                return p.MainWindowTitle.Contains(Marker, StringComparison.Ordinal);
+            }
+            catch (InvalidOperationException)
+            {
+                return false; // exited meanwhile
+            }
+        })];
+
+    /// <summary>A fresh empty Word document for WordCraft, made from the empty RTF with its own CLI.</summary>
+    private static string NewDocx(string wordcraft, string rtf, string docx)
+    {
+        var cli = Path.Combine(Path.GetDirectoryName(wordcraft)!, "wordcraft-cli.exe");
+        using var convert = Process.Start(new ProcessStartInfo(cli) { ArgumentList = { "convert", rtf, docx }, UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true })!;
+        convert.WaitForExit(30_000);
+        return docx;
     }
 
     private static string Quote(string path) => $"\"{path}\"";
+
+    /// <summary>The app under Program Files or Program Files (x86) (32-bit Office and Chrome), or null.</summary>
+    private static string? Find(string relative) =>
+        new[] { Environment.SpecialFolder.ProgramFiles, Environment.SpecialFolder.ProgramFilesX86 }
+            .Select(folder => Path.Combine(Environment.GetFolderPath(folder), relative))
+            .FirstOrDefault(File.Exists);
 }
