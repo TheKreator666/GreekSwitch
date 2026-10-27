@@ -1,10 +1,10 @@
-namespace GreekSwitch.Core.Session;
+﻿namespace GreekSwitch.Core.Session;
 
 /// <summary>
-/// The Greek text typed since the last pause, piece by piece as it is on screen, next to how it
-/// should read with its accents ("ειναι " / "είναι "). When the user pauses, the session retypes
-/// the stretch from the first piece that changes to the end in one correction, so the accents
-/// never race the user's typing. At most <see cref="MaxPieces"/> pieces (the oldest drop off,
+/// The text typed since the last pause, piece by piece as it is on screen, next to how it
+/// should read with its accents ("ειναι " / "είναι "; English and other unchanged text as is).
+/// When the user pauses, the session fixes the letters that change in place, in one correction,
+/// so the accents never race the user's typing. At most <see cref="MaxPieces"/> pieces (the oldest drop off,
 /// unaccented); cleared whenever the screen may no longer match it.
 /// </summary>
 internal sealed class AccentRun
@@ -32,8 +32,8 @@ internal sealed class AccentRun
     public void Clear() => _pieces.Clear();
 
     /// <summary>
-    /// From the first piece that changes to the end: the text on screen and its accented form,
-    /// and how many words change. Null if nothing would change.
+    /// From the first piece that changes to the end: the text on screen and its accented form
+    /// (the same length), and how many words change. Null if nothing would change.
     /// </summary>
     public (string Original, string Replacement, int Words)? Span()
     {

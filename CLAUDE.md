@@ -1,4 +1,4 @@
-# GreekSwitch
+﻿# GreekSwitch
 
 Windows tray app (.NET 8, WinForms) that watches physical keystrokes, and at each word boundary
 re-reads the word's keys in the other layout (Greek ↔ English). If the word was typed in the
@@ -79,7 +79,7 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
 - `WordBuffer` wipes its array. Don't add state that keeps typed text beyond the current word,
   the single armed `UndoRecord`, the single pending suggestion (until the next key), the last
   completed word (convert-last-word hotkey), (milestone 11) the keys of the last few words of the current run,
-  the Greek text since the last pause (`AccentRun`, ≤ 16 words) and key events held during a send (`KeyHold`, ≤ 200 ms).
+  the text since the last pause (`AccentRun`, ≤ 16 words) and key events held during a send (`KeyHold`, ≤ 200 ms).
 - Keep the WER exclusion and the `DropUnusedWpfNatives` target: nothing is extracted to disk at run time.
 - Any change to what is captured, stored or logged updates `SECURITY.md` in the same commit.
 
@@ -91,7 +91,11 @@ TypingSession: KeyClassifier → WordBuffer (VK codes) → at a delimiter: Decis
   sees it, the worker sends the Tab on); and key events that arrive while a correction is being
   sent (`KeyHold`: lock-free enqueue, replayed in order by the corrector, hard 200 ms cap).
 - Never retype while the user is typing when it can wait: missing accents are added at a pause
-  (`TypingSession.OnPause`), not per word. See `docs/accent-and-input-issues.md`.
+  (`TypingSession.OnPause`), not per word, and fixed in place (`Corrector.Retouch`: arrows to
+  the changed letters, retype only those, arrows back; no layout switch). See `docs/accent-and-input-issues.md`.
+- Never switch the layout right after sending keys without knowing the app has processed them:
+  the switch request is a posted message and reaches the app before queued input, so the keys
+  are then read with the new layout (`fti;ajv`).
 - Ignore events with `LLKHF_INJECTED` (our own output also carries `InputBuilder.Signature`).
 - A correction either happens completely or not at all. `Corrector.Replace` checks, in order:
   modifier held → focus moved → Enter/Tab into a command window → Shift held → switch layout

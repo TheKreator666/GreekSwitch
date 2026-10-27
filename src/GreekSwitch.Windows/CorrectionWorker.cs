@@ -1,4 +1,4 @@
-using GreekSwitch.Core.Decisions;
+﻿using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Layout;
 using GreekSwitch.Core.Session;
 using GreekSwitch.Windows.Focus;
@@ -33,7 +33,7 @@ public sealed class CorrectionWorker
     private readonly PasswordGate _gate = new();
     private readonly IInputSender _sender;
     private bool _excluded;
-    private long _droppedWhenCaptureStopped;
+    private readonly MissedKeys _missed = new();
 
     public CorrectionWorker(
         InputMonitor monitor,
@@ -117,10 +117,12 @@ public sealed class CorrectionWorker
                 break;
             case InputEventKind.ForegroundChanged:
                 LogFocusEvent(input);
+                _missed.FocusChanged(input.DroppedKeys);
                 OnForegroundChanged(input.Window);
                 break;
             case InputEventKind.FocusChanged:
                 LogFocusEvent(input);
+                _missed.FocusChanged(input.DroppedKeys);
                 OnFocusChanged(new FocusKey(input.Window, input.ChildId));
                 break;
             case InputEventKind.PolicyChanged:
@@ -260,13 +262,13 @@ public sealed class CorrectionWorker
         var capture = _policy.IsActive && !_excluded && !_gate.Blocked;
         if (capture != _monitor.CaptureKeys)
         {
-            if (capture && _monitor.DroppedKeys != _droppedWhenCaptureStopped)
+            if (capture && _missed.MissedOnResume(_monitor.DroppedKeys))
             {
                 _session.MarkPartial(); // keys were typed while capture was off
             }
             else if (!capture)
             {
-                _droppedWhenCaptureStopped = _monitor.DroppedKeys;
+                _missed.CaptureStopped(_monitor.DroppedKeys);
             }
 
             _monitor.CaptureKeys = capture;

@@ -1,4 +1,4 @@
-using GreekSwitch.Core.Tests.Support;
+﻿using GreekSwitch.Core.Tests.Support;
 
 namespace GreekSwitch.Core.Tests.Session;
 
@@ -36,10 +36,12 @@ public class NoTextInLogsTests(LanguageDataFixture data)
         sim.TypeIn(Lang.Greek, "ειναι πολυ ").Pause();   // accents added
         sim.RefuseReplacements = true;
         sim.TypeIn(Lang.Greek, "ωραιο ").Pause();        // a guard refused them
+        sim.RefuseReplacements = false;
+        sim.TypeIn(Lang.Greek, "φτιαξω ενα αππλιψατιον ").Pause(); // English in between: fixed in place
 
         var log = sim.Logger.AllOutput;
         log.Should().Contain("Accents added").And.Contain("Accents not added");
-        foreach (var word in new[] { "ειναι", "είναι", "πολυ", "πολύ", "ωραιο", "ωραίο" })
+        foreach (var word in new[] { "ειναι", "είναι", "πολυ", "πολύ", "ωραιο", "ωραίο", "φτιαξω", "φτιάξω", "ενα", "ένα", "αππλιψατιον", "application" })
         {
             log.Should().NotContainEquivalentOf(word, $"the log must not contain the typed word \"{word}\"");
         }

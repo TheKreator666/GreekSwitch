@@ -1,4 +1,4 @@
-using GreekSwitch.Core.Decisions;
+﻿using GreekSwitch.Core.Decisions;
 using GreekSwitch.Core.Input;
 using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
@@ -364,7 +364,7 @@ public sealed class TypingSession
         }
 
         _accentRun.Clear();
-        if (!_output.Replace(span.Original, span.Replacement, Lang.Greek))
+        if (!_output.Retouch(span.Original, span.Replacement))
         {
             _logger.LogInformation("Accents not added, words {Words}", span.Words);
             return;
@@ -384,18 +384,24 @@ public sealed class TypingSession
     }
 
     /// <summary>
-    /// A kept word joins the text waiting for accents. Greek-layout words only: Greek keys can't
-    /// retype Latin letters, so a word in the English layout ends the stretch.
+    /// A kept word joins the text waiting for accents. A word typed in the English layout joins it
+    /// unchanged: accents are fixed in place, so English text in between is never retyped.
     /// </summary>
     private void TrackAccents(CompletedWord word, Keep keep, Delimiter delimiter)
     {
-        if (word.Layout != Lang.Greek || word.Tainted || word.MixedLayout)
+        if (word.Tainted || word.MixedLayout)
         {
             _accentRun.Clear();
             return;
         }
 
         var shown = _engine.Display(word.Keys, word.Layout, word.Layout);
+        if (word.Layout != Lang.Greek)
+        {
+            _accentRun.AddFixed(shown + delimiter.Text);
+            return;
+        }
+
         var accented = keep.Reason is KeepReason.Plausible or KeepReason.TooShort ? _engine.WithAccents(shown) : shown;
         _accentRun.Add(shown + delimiter.Text, accented + delimiter.Text);
     }
@@ -522,9 +528,10 @@ public sealed class TypingSession
             _output.TurnOffCapsLock();
         }
 
-        // A Greek replacement already has its accents and stays part of the stretch; earlier
-        // words changing too, or English text, end it.
-        if (replace.TargetLayout == Lang.Greek && earlier.Count == 0)
+        // The replacement already has its accents (or is English) and stays part of the stretch:
+        // accents are fixed in place, so English text in between is fine. Earlier words changing
+        // too end it (the stretch no longer matches the screen).
+        if (earlier.Count == 0)
         {
             _accentRun.AddFixed(replace.Text + delimiter.Text);
         }

@@ -1,4 +1,4 @@
-# GreekSwitch
+﻿# GreekSwitch
 
 A Windows tray app that fixes words typed in the wrong keyboard layout, Greek vs English, as
 you type. At each word boundary it re-reads the keys you pressed in both layouts. If the other
@@ -87,8 +87,10 @@ A word typed in the English layout (`kanei`) is converted with its accents at on
 Greek typed in the Greek layout without accents gets them **when you pause** (about half a
 second without a key), all the words since the last pause in one go. This avoids retyping
 while you type, which can lose letters (see [docs/accent-and-input-issues.md](docs/accent-and-input-issues.md)).
-An English word, Enter, a click or a Backspace into earlier text ends the stretch: the Greek
-words before it stay as typed. Backspace after a pause edits the text as usual (Ctrl+Z in the
+Only the letters that change are retyped, in place (the caret moves to them and back), so
+English words in between (`θέλω να φτιάξω ένα application`) stay untouched and get no accents
+of their own. Enter, a click or a Backspace into earlier text ends the stretch: the Greek words
+before it stay as typed. Backspace after a pause edits the text as usual (Ctrl+Z in the
 app undoes the accents). Not in suggest-only apps.
 
 The accented spelling comes from the most frequent spellings of about 38,000 Greek words

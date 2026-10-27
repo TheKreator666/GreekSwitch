@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using GreekSwitch.Core;
 using GreekSwitch.Core.Layout;
@@ -144,10 +144,16 @@ public sealed class Corrector : ICorrectionOutput
 
         // Another tool (AutoCorrect, text suggestions, Grammarly) may have rewritten the word
         // after the delimiter; blind Backspaces would then delete the wrong characters.
-        if (_textVerifier.BeforeCaret(before) == TextMatch.Mismatch)
+        switch (_textVerifier.BeforeCaret(before))
         {
-            _logger.LogInformation("Correction skipped: the text before the caret is not what was typed");
-            return false;
+            case TextMatch.Mismatch:
+                _logger.LogInformation("Correction skipped: the text before the caret is not what was typed");
+                return false;
+            case TextMatch.FirstLetterCapitalised:
+                // Word capitalised the sentence's first word: it would have done so to the right word too.
+                _logger.LogInformation("The app capitalised the first letter; the replacement keeps it");
+                text = CapitaliseFirstLetter(text);
+                break;
         }
 
         var keys = KeyPlanner.Plan(text, _maps(layout), _keyboard.CapsLockOn);
@@ -166,6 +172,119 @@ public sealed class Corrector : ICorrectionOutput
         }
 
         return true;
+    }
+
+    private static string CapitaliseFirstLetter(string text)
+    {
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (char.IsLetter(text[i]))
+            {
+                return text[..i] + char.ToUpperInvariant(text[i]) + text[(i + 1)..];
+            }
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// Fixes letters in place (missing accents): one batch that moves the caret left to each
+    /// changed stretch, Backspaces it, types the new letters, and moves back to the end. No layout
+    /// switch: a switch requested right after typed keys reaches the app before them (posted
+    /// messages go before input) and turns queued Greek keys into Latin letters. Real keys when
+    /// the active layout types the letters, Unicode otherwise (e.g. the English layout is active
+    /// after an English word; Unicode is only mangled right after a switch, and there is none).
+    /// </summary>
+    public bool Retouch(string text, string replacement)
+    {
+        if (text.Length != replacement.Length)
+        {
+            return false;
+        }
+
+        if (_keyboard.CommandModifierHeld)
+        {
+            _logger.LogInformation("Correction skipped: a modifier key is held");
+            return false;
+        }
+
+        if (!_focus.StillFocused(_currentFocus()))
+        {
+            _logger.LogInformation("Correction skipped: focus moved to another control");
+            return false;
+        }
+
+        if (!WaitUntil(() => !_keyboard.ShiftHeld))
+        {
+            _logger.LogInformation("Correction skipped: Shift is held");
+            return false;
+        }
+
+        if (_typeAhead.UserTypedAhead)
+        {
+            _logger.LogInformation("Correction skipped: typing continued before it could be applied");
+            return false;
+        }
+
+        // Where the text can be read, take what the app already did (its own accents, a sentence-start
+        // capital) and only fix the rest; any other difference means the text isn't ours to touch.
+        if (_textVerifier.ReadBeforeCaret(text.Length) is { } screen)
+        {
+            if (Focus.UiaTextVerifier.Reconcile(screen, text, replacement) is not { } onScreen)
+            {
+                _logger.LogInformation("Correction skipped: the text before the caret is not what was typed");
+                return false;
+            }
+
+            (text, replacement) = onScreen;
+        }
+
+        var layout = _layouts.CurrentLayout();
+        var inputs = RetouchInputs(text, replacement, layout is { } lang ? _maps(lang) : null, _keyboard.CapsLockOn, _scanCode);
+        var sent = SendHoldingUserKeys(inputs);
+        if (sent != inputs.Length)
+        {
+            _logger.LogWarning("SendInput delivered {Sent} of {Total} events (error {Error})", sent, inputs.Length, Marshal.GetLastPInvokeError());
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The batch for <see cref="Retouch"/>, right to left so earlier positions don't move: Left
+    /// arrows to the end of each changed stretch, Backspaces over it, its new letters, and finally
+    /// Right arrows back to where the caret was.
+    /// </summary>
+    public static INPUT[] RetouchInputs(string text, string replacement, LayoutMap? map, bool capsLock, Func<int, ushort> scanCode)
+    {
+        var inputs = new List<INPUT>();
+        var caret = text.Length;
+        var end = text.Length;
+        while (end > 0)
+        {
+            if (text[end - 1] == replacement[end - 1])
+            {
+                end--;
+                continue;
+            }
+
+            var start = end - 1;
+            while (start > 0 && text[start - 1] != replacement[start - 1])
+            {
+                start--;
+            }
+
+            inputs.AddRange(InputBuilder.Arrows(VirtualKeys.Left, caret - end, scanCode));
+            var letters = replacement[start..end];
+            var keys = map is null ? null : KeyPlanner.Plan(letters, map, capsLock);
+            inputs.AddRange(keys is null ? InputBuilder.Build(end - start, letters) : InputBuilder.BuildKeys(end - start, keys, scanCode));
+            caret = end;
+            end = start;
+        }
+
+        inputs.AddRange(InputBuilder.Arrows(VirtualKeys.Right, text.Length - caret, scanCode));
+        return [.. inputs];
     }
 
     /// <summary>

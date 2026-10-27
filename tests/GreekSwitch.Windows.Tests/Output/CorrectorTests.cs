@@ -1,4 +1,4 @@
-using GreekSwitch.Core;
+﻿using GreekSwitch.Core;
 using GreekSwitch.Core.Layout;
 using GreekSwitch.Windows.Layouts;
 using GreekSwitch.Windows.Native;
@@ -26,6 +26,7 @@ public class CorrectorTests
     private bool _commandWindow;
     private TextMatch _textMatch = TextMatch.Unknown;
     private string? _textChecked;
+    private string? _screen; // what ReadBeforeCaret returns; null = can't be read
 
     public CorrectorTests()
     {
@@ -89,6 +90,125 @@ public class CorrectorTests
 
         _sender.Batches.Should().BeEmpty();
         _textChecked.Should().Be("ηελλο ", "it checks exactly the text it is about to delete");
+    }
+
+    /// <summary>
+    /// Live run: accents typed just before a switch to English came out as `fti;ajv` (the switch
+    /// reached the app before the queued Greek keys). Accents are now fixed in place: arrows to the
+    /// changed letters, retype only those, arrows back. English text is never retyped, no switch.
+    /// </summary>
+    [Fact]
+    public void Retouch_retypes_only_the_changed_letters_and_returns_to_the_end()
+    {
+        _screen = "x ενα ok ";
+
+        Create().Retouch("ενα ok ", "ένα ok ").Should().BeTrue();
+
+        var downs = Downs(_sender.Batches.Single());
+        downs.Should().Equal(
+            [.. Enumerable.Repeat((ushort)VirtualKeys.Left, 6), // to the right of ε
+             (ushort)VirtualKeys.Back, (ushort)VirtualKeys.Oem1, (ushort)'E', // ; then e: έ
+             .. Enumerable.Repeat((ushort)VirtualKeys.Right, 6)]);
+        _layouts.SwitchRequests.Should().BeEmpty("the layout is never switched");
+    }
+
+    [Fact]
+    public void Retouch_fixes_several_words_right_to_left()
+    {
+        Create().Retouch("φτιαξω ενα x ", "φτιάξω ένα x ").Should().BeTrue();
+
+        var downs = Downs(_sender.Batches.Single());
+        downs.Count(vk => vk == VirtualKeys.Back).Should().Be(2, "one letter in each word");
+        downs.Count(vk => vk == VirtualKeys.Left).Should().Be(9, "to ε (6), then on to α (3)");
+        downs.Count(vk => vk == VirtualKeys.Right).Should().Be(9, "back to the end");
+    }
+
+    [Fact]
+    public void Retouch_sends_arrows_as_extended_keys()
+    {
+        Create().Retouch("ενα ", "ένα ").Should().BeTrue();
+
+        // Without the flag Windows reads the numpad key, which types 4 or 6 with Num Lock on.
+        _sender.Batches.Single().Where(i => i.U.ki.wVk is VirtualKeys.Left or VirtualKeys.Right)
+            .Should().OnlyContain(i => (i.U.ki.dwFlags & 0x0001) != 0);
+    }
+
+    [Fact]
+    public void Retouch_types_Unicode_when_the_English_layout_is_active()
+    {
+        _layouts.Current = Lang.English; // the sentence ended with an English word
+
+        Create().Retouch("ενα ok ", "ένα ok ").Should().BeTrue();
+
+        var batch = _sender.Batches.Single();
+        batch.Should().Contain(i => (i.U.ki.dwFlags & Unicode) != 0 && i.U.ki.wScan == 'έ');
+        _layouts.SwitchRequests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Retouch_keeps_the_capital_the_app_gave_the_first_letter()
+    {
+        _screen = "Ενα "; // Word: ενα → Ενα at a sentence start
+
+        Create().Retouch("ενα ", "ένα ").Should().BeTrue();
+
+        var downs = Downs(_sender.Batches.Single());
+        downs.Should().ContainInConsecutiveOrder((ushort)VirtualKeys.Oem1, (ushort)VirtualKeys.Shift, (ushort)'E'); // Έ
+    }
+
+    /// <summary>
+    /// Live run, Word: its AutoCorrect accented ένα itself, and the whole accent batch was skipped.
+    /// A letter the app already gave its accent is left alone; the others are still fixed.
+    /// </summary>
+    [Fact]
+    public void Retouch_keeps_accents_the_app_already_added()
+    {
+        _screen = "ένα κανει ";
+
+        Create().Retouch("ενα κανει ", "ένα κάνει ").Should().BeTrue();
+
+        var downs = Downs(_sender.Batches.Single());
+        downs.Count(vk => vk == VirtualKeys.Back).Should().Be(1, "only κανει still needs its accent");
+        downs.Count(vk => vk == VirtualKeys.Left).Should().Be(4, "back to α of κανει, not on to ένα");
+    }
+
+    [Theory]
+    [InlineData("ενο ")]  // a different letter
+    [InlineData("εν ")]   // shorter
+    [InlineData("ενά ")]  // an accent we wouldn't add
+    public void Retouch_types_nothing_if_the_text_was_changed(string screen)
+    {
+        _screen = screen;
+
+        Create().Retouch("ενα ", "ένα ").Should().BeFalse();
+
+        _sender.Batches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Retouch_types_nothing_if_the_user_typed_ahead()
+    {
+        _guard.OnKeyCaptured(isTypingKey: true);
+
+        Create().Retouch("ενα ", "ένα ").Should().BeFalse();
+
+        _sender.Batches.Should().BeEmpty();
+    }
+
+    private static List<ushort> Downs(INPUT[] batch) =>
+        [.. batch.Where(i => (i.U.ki.dwFlags & KeyUp) == 0).Select(i => i.U.ki.wVk)];
+
+    [Fact]
+    public void Keeps_the_capital_the_app_gave_the_first_letter()
+    {
+        _textMatch = TextMatch.FirstLetterCapitalised; // Word: ψονταινερ → Ψονταινερ at a sentence start
+
+        Create().Replace("ηελλο ", "hello ", Lang.English).Should().BeTrue();
+
+        var downs = _sender.Batches.Single().Where(i => (i.U.ki.dwFlags & KeyUp) == 0).Select(i => i.U.ki.wVk).ToList();
+        downs.Count(vk => vk == VirtualKeys.Back).Should().Be(6, "capitalising doesn't change the length");
+        downs.SkipWhile(vk => vk == VirtualKeys.Back).Take(2).Should().Equal((ushort)VirtualKeys.Shift, (ushort)'H');
+        downs.Skip(8).Should().NotContain((ushort)VirtualKeys.Shift, "only the first letter is capitalised");
     }
 
     [Theory]
@@ -341,6 +461,8 @@ public class CorrectorTests
             test._textChecked = expected;
             return test._textMatch;
         }
+
+        public string? ReadBeforeCaret(int length) => test._screen;
     }
 
     private sealed class FakeKeyboard : IKeyboardState

@@ -1,4 +1,4 @@
-using System.Threading.Channels;
+﻿using System.Threading.Channels;
 using GreekSwitch.Windows.Native;
 using GreekSwitch.Windows.Output;
 using static GreekSwitch.Windows.Native.NativeMethods;
@@ -122,7 +122,7 @@ public sealed class InputMonitor : IDisposable
     {
         using var keyboard = new KeyboardHook(_channel.Writer, () => _captureKeys, TypeAhead, Keyboard, AcceptForeignInjectedInput, () => Interlocked.Increment(ref _droppedKeys), Activity, Suggestion, Hold);
         using var mouse = new MouseHook(_channel.Writer, Activity);
-        using var focus = new FocusWatcher(_channel.Writer);
+        using var focus = new FocusWatcher(_channel.Writer, () => DroppedKeys);
         try
         {
             _threadId = GetCurrentThreadId();

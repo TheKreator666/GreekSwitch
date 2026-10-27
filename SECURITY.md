@@ -1,4 +1,4 @@
-# Security and privacy
+﻿# Security and privacy
 
 GreekSwitch installs a **global keyboard hook**, which is the same mechanism keyloggers use. This
 page explains what it captures, what it doesn't, and why.
@@ -9,7 +9,7 @@ page explains what it captures, what it doesn't, and why.
 |---|---|---|
 | Virtual-key code and Shift / Caps Lock / Ctrl / Alt / Win state of each **physical** key press | To re-read the current word in both layouts | An in-memory queue, then an in-memory word buffer. The buffer is **wiped** (overwritten, not just emptied) at every word boundary, click, focus change, caret key or shortcut. |
 | The keys of the last 1–3 completed words of the current run (same field, separated only by spaces) | So that after a confident correction the words just before it can be fixed too ("den θέλω" → "δεν θέλω") | Memory only. Wiped on any reset, punctuation, Enter/Tab, a Backspace into earlier text, or when a word leaves the 3-word window. |
-| The Greek text typed since the last pause (at most 16 words, as shown on screen and with accents) | So missing accents can be added in one go when you pause | Memory only. Cleared at the pause, and on any reset, Enter/Tab, English text, or a Backspace into earlier text. |
+| The text typed since the last pause (at most 16 words, as shown on screen and, for Greek words, with accents; English words in between are kept as typed) | So missing accents can be added in one go when you pause, by fixing the changed letters in place | Memory only. Cleared at the pause, and on any reset, Enter/Tab, or a Backspace into earlier text. |
 | Key events you press during the few milliseconds a correction is being typed | With a low-level hook installed, SendInput isn't atomic: a key pressed meanwhile would land inside the correction. They are held back and replayed right after it, in order | Memory only, at most 200 ms, then passed on. Never stored or logged (only a count, at Debug level). |
 | The keys of the last completed word and its delimiter | So the *Convert last word* hotkey can convert it after you've pressed Space | Memory only. Wiped on any reset (click, focus change, caret key, shortcut) and replaced by the next word. |
 | The selected text, only when you press the *Convert selection* hotkey | To convert it to the other layout | Copied by the app itself (GreekSwitch sends Ctrl+C), converted in memory, pasted back (Ctrl+V), and then your previous clipboard content is put back. Never stored or logged. See *The clipboard* below. |
