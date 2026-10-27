@@ -51,10 +51,10 @@ internal static partial class Program
             return 2;
         }
 
-        // --matrix <work dir>: the same wrong-layout and accent cases in Notepad, Word and browsers.
-        if (args is ["--matrix", var workDir])
+        // --matrix <work dir> [app...]: the same wrong-layout and accent cases in Notepad, Word and browsers.
+        if (args is ["--matrix", var workDir, .. var only])
         {
-            return Matrix.Run(workDir);
+            return Matrix.Run(workDir, only);
         }
 
         // --append <file>: type Greek without accents at the end of an existing text file, at a
@@ -66,6 +66,11 @@ internal static partial class Program
 
         using var notepad = Process.Start("notepad.exe");
         Thread.Sleep(3000);
+        if (!BringNotepadToFront())
+        {
+            return Fail("Notepad didn't come to the front.");
+        }
+
         Tap(Escape);
         Chord('N', Ctrl); // a fresh tab: never touch restored session tabs
         Thread.Sleep(1000);
@@ -76,7 +81,7 @@ internal static partial class Program
             for (var trial = 1; trial <= 3; trial++)
             {
                 TypeInEnglish("vra na testaroyme to n;eo application ");
-                Check($"sentence {trial}", ReadAndClear(), "ωρα να τεσταρουμε το νέο application ");
+                Check($"sentence {trial}", ReadAndClear(), "ώρα να τεσταρουμε το νέο application "); // ώρα: accents at a pause
             }
 
             // "to" is an English word, so it is kept; the hotkey converts it, Backspace undoes that.
@@ -155,7 +160,7 @@ internal static partial class Program
             // Windows won't let a background process take the foreground: ask, then wait for a click.
             foreach (var p in Process.GetProcessesByName("Notepad"))
             {
-                _ = Native.SetForegroundWindow(p.MainWindowHandle);
+                BringToFront(p.MainWindowHandle);
             }
 
             if (!NotepadIsForeground())
@@ -255,7 +260,7 @@ internal static partial class Program
         Thread.Sleep(3000);
         foreach (var p in Process.GetProcessesByName("Notepad"))
         {
-            _ = Native.SetForegroundWindow(p.MainWindowHandle);
+            BringToFront(p.MainWindowHandle);
         }
 
         var clock = Stopwatch.StartNew();
@@ -464,6 +469,7 @@ internal static partial class Program
 
     private static string ReadAndClear()
     {
+        ClearClipboard(); // a copy that fails then reads as "<no text>", not as the previous case's text
         Chord('A', Ctrl);
         Chord('C', Ctrl);
         Thread.Sleep(300);
@@ -474,6 +480,12 @@ internal static partial class Program
     }
 
     private static string GetClipboard() => Sta(() => Clipboard.ContainsText() ? Clipboard.GetText() : "<no text>");
+
+    private static void ClearClipboard() => Sta(() =>
+    {
+        Clipboard.Clear();
+        return "";
+    });
 
     private static void SetClipboard(string text) => Sta(() =>
     {
@@ -549,6 +561,37 @@ internal static partial class Program
 
     private static bool NotepadIsForeground() => TargetIsForeground();
 
+    private static bool BringNotepadToFront()
+    {
+        var clock = Stopwatch.StartNew();
+        while (!NotepadIsForeground() && clock.Elapsed < TimeSpan.FromSeconds(20))
+        {
+            foreach (var p in Process.GetProcessesByName("Notepad"))
+            {
+                BringToFront(p.MainWindowHandle);
+            }
+
+            Thread.Sleep(500);
+        }
+
+        return NotepadIsForeground();
+    }
+
+    /// <summary>The process owning the foreground window, or null.</summary>
+    internal static string? ForegroundProcessName()
+    {
+        _ = Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out var pid);
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return process.ProcessName;
+        }
+        catch (ArgumentException)
+        {
+            return null; // exited meanwhile
+        }
+    }
+
     /// <summary>The foreground window's title (for the matrix's safety check).</summary>
     internal static string ForegroundTitle()
     {
@@ -557,7 +600,36 @@ internal static partial class Program
         return buffer.ToString();
     }
 
-    internal static void FocusWindowOf(Process process) => _ = Native.SetForegroundWindow(process.MainWindowHandle);
+    internal static void FocusWindowOf(Process process) => BringToFront(process.MainWindowHandle);
+
+    /// <summary>
+    /// Windows won't let a background process take the foreground. Sharing the foreground thread's
+    /// input state for the call lifts that lock, without synthetic keys (which GreekSwitch would see).
+    /// </summary>
+    private static void BringToFront(nint hwnd)
+    {
+        var foreground = Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out _);
+        var self = Native.GetCurrentThreadId();
+        var attached = foreground != 0 && foreground != self && Native.AttachThreadInput(self, foreground, true);
+        try
+        {
+            _ = Native.SetForegroundWindow(hwnd);
+        }
+        finally
+        {
+            if (attached)
+            {
+                _ = Native.AttachThreadInput(self, foreground, false);
+            }
+        }
+
+        if (Native.GetForegroundWindow() != hwnd)
+        {
+            // Last resort: Windows always activates a window restored from minimised.
+            _ = Native.ShowWindow(hwnd, 6); // SW_MINIMIZE
+            _ = Native.ShowWindow(hwnd, 9); // SW_RESTORE
+        }
+    }
 
     internal static void Type(Lang layout, string keys, int gapMs) => TypeIn(layout, keys, gapMs);
 
@@ -598,6 +670,12 @@ internal static partial class Program
 
         [DllImport("user32.dll")]
         public static extern bool SetForegroundWindow(nint hwnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool AttachThreadInput(uint attach, uint attachTo, bool doAttach);
+
+        [DllImport("user32.dll")]
+        public static extern bool ShowWindow(nint hwnd, int command);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         public static extern int GetWindowTextW(nint hwnd, StringBuilder text, int count);
