@@ -28,6 +28,12 @@ internal static class Matrix
     /// <param name="only">Names to run (e.g. "Chrome"), matched against the start of each target's name; empty runs all.</param>
     public static int Run(string workDir, string[] only)
     {
+        if (MarkerWindows().Count > 0)
+        {
+            Console.Error.WriteLine($"A window with \"{Marker}\" in its title is already open (a previous run?): close it first.");
+            return 2;
+        }
+
         Directory.CreateDirectory(workDir);
         var text = Path.Combine(workDir, Marker + ".txt");
         var rtf = Path.Combine(workDir, Marker + ".rtf");
@@ -42,6 +48,8 @@ internal static class Matrix
         var edge = Find(@"Microsoft\Edge\Application\msedge.exe");
         var chrome = Find(@"Google\Chrome\Application\chrome.exe");
         var firefox = Find(@"Mozilla Firefox\firefox.exe");
+        var wordcraft = Find(@"WordCraft\wordcraft.exe");
+        var docx = Path.Combine(workDir, Marker + ".docx");
         const string BrowserFlags = "--no-first-run --no-default-browser-check --disable-extensions --new-window";
         string Profile(string name) => Directory.CreateDirectory(Path.Combine(workDir, "profile-" + name)).FullName;
 
@@ -54,6 +62,9 @@ internal static class Matrix
             new("Edge, textarea", "msedge", () => Process.Start(edge!, $"--user-data-dir={Quote(Profile("edge"))} {BrowserFlags} {Quote(textarea)}"), () => edge is null ? "not installed" : null),
             new("Chrome, contenteditable", "chrome", () => Process.Start(chrome!, $"--user-data-dir={Quote(Profile("chrome"))} {BrowserFlags} {Quote(editable)}"), () => chrome is null ? "not installed" : null),
             new("Firefox, textarea", "firefox", () => Process.Start(firefox!, $"-no-remote -profile {Quote(Profile("firefox"))} {Quote(textarea)}"), () => firefox is null ? "not installed" : null),
+            new("WordCraft", "wordcraft", () => Process.Start(wordcraft!, Quote(NewDocx(wordcraft!, rtf, docx))),
+                () => wordcraft is null ? "not installed"
+                    : Process.GetProcessesByName("wordcraft").Length > 0 ? "WordCraft is already open: close it to include it" : null),
         ];
 
         var summary = new List<string>();
@@ -107,8 +118,8 @@ internal static class Matrix
                         actual = TypeCase(layout, keys);
                     }
 
-                    // Each case starts an empty document: Word's AutoCorrect capitalises the first word.
-                    var want = target.Name == "Word" ? char.ToUpperInvariant(expected[0]) + expected[1..] : expected;
+                    // Each case starts an empty document: word processors capitalise the first word.
+                    var want = target.Name is "Word" or "WordCraft" ? char.ToUpperInvariant(expected[0]) + expected[1..] : expected;
                     Program.Expect($"{target.Name}: {name}", actual, want.TrimEnd());
                 }
 
@@ -194,6 +205,13 @@ internal static class Matrix
                     p.Kill(); // only ever ours: the run refuses to start Word when it's already open
                 }
             }
+            else if (name == "WordCraft")
+            {
+                foreach (var p in Process.GetProcessesByName("wordcraft"))
+                {
+                    p.Kill(); // only ever ours: the run refuses to start it when it's already open
+                }
+            }
             else if (started is { HasExited: false })
             {
                 started.Kill(entireProcessTree: true); // the throwaway-profile browser only
@@ -204,6 +222,42 @@ internal static class Matrix
         }
 
         Thread.Sleep(1500);
+
+        // Firefox hands its window to another process, which outlives the one we started. Only
+        // test windows carry the marker, so whatever still shows it is ours to close.
+        foreach (var p in MarkerWindows())
+        {
+            try
+            {
+                p.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+    }
+
+    /// <summary>Processes whose main window carries the test marker.</summary>
+    private static List<Process> MarkerWindows() =>
+        [.. Process.GetProcesses().Where(p =>
+        {
+            try
+            {
+                return p.MainWindowTitle.Contains(Marker, StringComparison.Ordinal);
+            }
+            catch (InvalidOperationException)
+            {
+                return false; // exited meanwhile
+            }
+        })];
+
+    /// <summary>A fresh empty Word document for WordCraft, made from the empty RTF with its own CLI.</summary>
+    private static string NewDocx(string wordcraft, string rtf, string docx)
+    {
+        var cli = Path.Combine(Path.GetDirectoryName(wordcraft)!, "wordcraft-cli.exe");
+        using var convert = Process.Start(new ProcessStartInfo(cli) { ArgumentList = { "convert", rtf, docx }, UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true })!;
+        convert.WaitForExit(30_000);
+        return docx;
     }
 
     private static string Quote(string path) => $"\"{path}\"";

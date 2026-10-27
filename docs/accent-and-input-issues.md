@@ -157,6 +157,8 @@ no-break space as a space (one Backspace deletes either). Chrome 0/5 → 4/5.
    are never retyped.
 5. **`--matrix` results (2026-10-27, after issues D–F):** Notepad, Word, Edge (textarea),
    Chrome (contenteditable) and Firefox (textarea) all 4/5; the fifth case everywhere is issue 4.
+   After issue 4 and Word's own accents (Reconcile): 25/25. WordCraft 0.11 (added later): all five
+   correct; it capitalises the sentence start like Word.
    A window of the app under test that takes focus (Edge's extension page, Firefox at start-up)
    now makes the driver retry the case; any other window still stops the run. The cases are `container`
    and `route survey` typed in the Greek layout, `doyleyei` typed in the English layout, a Greek
