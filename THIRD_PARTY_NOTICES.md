@@ -40,7 +40,9 @@ two dictionaries above, so they are derived works of them and carry the same ter
 ## Word frequency tables (embedded in the executable)
 
 `data/frequency/el.zipf` and `en.zipf` (compiled from `el.tsv`/`en.tsv`) are embedded in
-GreekSwitch.Core and used by the decision engine.
+GreekSwitch.Core and used by the decision engine. `data/frequency/el.accents` (the accented
+spelling of each Greek word, also compiled from `el.tsv`) is embedded too, and puts the accents
+back on Greek words typed in the English layout without them.
 
 - Source: wordfreq 3.1.1 by Robyn Speer and contributors, https://github.com/rspeer/wordfreq
 - License: wordfreq's **data is CC BY-SA 4.0** (its code, which GreekSwitch doesn't use, is

@@ -7,6 +7,7 @@ using GreekSwitch.Core.Layout;
 using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
 using GreekSwitch.Core.Session;
+using GreekSwitch.Core.Text;
 using GreekSwitch.Windows;
 using GreekSwitch.Windows.Focus;
 using GreekSwitch.Windows.Health;
@@ -122,17 +123,18 @@ internal sealed class GreekSwitchHost : IDisposable
         ILogger logger)
     {
         // Load the language data (and check the layouts) off the UI thread.
-        var (dictionaries, trigrams, frequencies, phonetic, greek, english) = await Task.Run(() =>
+        var (dictionaries, trigrams, frequencies, accents, phonetic, greek, english) = await Task.Run(() =>
         {
             return (LexiconDictionaryService.FromEmbeddedResources(),
                 TrigramModels.FromEmbeddedResources(),
                 WordFrequencyTable.FromEmbeddedResources(),
+                GreekAccentTable.FromEmbeddedResources(),
                 PhoneticIndex.FromEmbeddedResources(),
                 LayoutVerifier.VerifyInstalled(StaticLayouts.Greek, logger),
                 LayoutVerifier.VerifyInstalled(StaticLayouts.English, logger));
         }).ConfigureAwait(true);
 
-        var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams, frequencies), neverConvert, ToScoring(settings), alwaysConvert);
+        var engine = new DecisionEngine(new DualDecoder(greek, english), new Scorer(dictionaries, trigrams, frequencies), neverConvert, ToScoring(settings), alwaysConvert, accents);
         var layouts = new LayoutSwitcher(logger);
         var uia = new UiaThread();
         var monitor = new InputMonitor
@@ -184,7 +186,7 @@ internal sealed class GreekSwitchHost : IDisposable
 
         var worker = new CorrectionWorker(monitor, session, engine, layouts, new PasswordFieldDetector(), policy, uia, logger);
         logger.LogInformation("GreekSwitch started");
-        return new GreekSwitchHost(monitor, uia, engine, session, worker, layouts, new TextConverter(greek, english), loanwords, suggestions, logger);
+        return new GreekSwitchHost(monitor, uia, engine, session, worker, layouts, new TextConverter(greek, english, accents), loanwords, suggestions, logger);
     }
 
     /// <summary>Applies changed settings. Safe from the UI thread: options are swapped atomically.</summary>

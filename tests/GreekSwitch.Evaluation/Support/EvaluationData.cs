@@ -2,6 +2,7 @@ using System.Globalization;
 using GreekSwitch.Core;
 using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
+using GreekSwitch.Core.Text;
 
 namespace GreekSwitch.Evaluation.Support;
 
@@ -13,6 +14,7 @@ public sealed class EvaluationData : ILanguageData
         Dictionaries = LexiconDictionaryService.FromEmbeddedResources();
         Trigrams = TrigramModels.FromEmbeddedResources();
         Frequencies = WordFrequencyTable.FromEmbeddedResources();
+        Accents = GreekAccentTable.FromEmbeddedResources();
         Phonetic = PhoneticIndex.FromEmbeddedResources();
     }
 
@@ -21,6 +23,8 @@ public sealed class EvaluationData : ILanguageData
     public ITrigramModel Trigrams { get; }
 
     public IWordFrequency Frequencies { get; }
+
+    public IGreekAccents Accents { get; }
 
     /// <summary>The English phonetic index for the loanword detector.</summary>
     public PhoneticIndex Phonetic { get; }

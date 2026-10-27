@@ -26,6 +26,20 @@ public class SentenceTests(LanguageDataFixture data, ITestOutputHelper output)
         { "I love ελλάδα", "I love ελλάδα" },
     };
 
+    /// <summary>
+    /// Greek typed in the English layout without the tonos key: the converted words get their
+    /// accents back. (Words typed without accents in the Greek layout are the user's own: kept.)
+    /// </summary>
+    [Theory]
+    [InlineData("Θέλω να φτιάξω ένα πρόγραμμα poy ua kanei prajeis", "Θέλω να φτιάξω ένα πρόγραμμα που θα κάνει πράξεις")]
+    [InlineData("Kalhmera", "Καλημέρα")]
+    public void Puts_back_accents_the_wrong_layout_left_out(string typed, string expected)
+    {
+        var sim = new TypingSimulator(data, followLayoutSwitches: false).Type(typed + " ");
+
+        sim.Screen.Should().Be(expected + " ");
+    }
+
     /// <summary>The user keeps typing each word in the layout it shows, whatever we switch to.</summary>
     [Theory]
     [MemberData(nameof(Sentences))]

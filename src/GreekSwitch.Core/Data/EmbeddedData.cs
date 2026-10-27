@@ -12,6 +12,7 @@ public static class EmbeddedData
     public const string EnglishLexicon = "GreekSwitch.lexicon.en.lex";
     public const string GreekFrequencies = "GreekSwitch.frequency.el.zipf";
     public const string EnglishFrequencies = "GreekSwitch.frequency.en.zipf";
+    public const string GreekAccents = "GreekSwitch.frequency.el.accents";
     public const string EnglishPhonetic = "GreekSwitch.phonetic.en.idx";
 
     public static Stream Open(string resourceName) =>

@@ -1,5 +1,6 @@
 using GreekSwitch.Core.Loanwords;
 using GreekSwitch.Core.Scoring;
+using GreekSwitch.Core.Text;
 using GreekSwitch.TestSupport;
 
 namespace GreekSwitch.Core.Tests.Support;
@@ -12,6 +13,7 @@ public sealed class LanguageDataFixture : ILanguageData
         Dictionaries = LexiconDictionaryService.FromEmbeddedResources();
         Trigrams = TrigramModels.FromEmbeddedResources();
         Frequencies = WordFrequencyTable.FromEmbeddedResources();
+        Accents = GreekAccentTable.FromEmbeddedResources();
         Phonetic = PhoneticIndex.FromEmbeddedResources();
     }
 
@@ -20,6 +22,8 @@ public sealed class LanguageDataFixture : ILanguageData
     public ITrigramModel Trigrams { get; }
 
     public IWordFrequency Frequencies { get; }
+
+    public IGreekAccents Accents { get; }
 
     public PhoneticIndex Phonetic { get; }
 }

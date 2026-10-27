@@ -20,16 +20,19 @@ public sealed class DecisionEngine
     private readonly Scorer _scorer;
     private readonly INeverConvertList _neverConvert;
     private readonly INeverConvertList _alwaysConvert;
+    private readonly IGreekAccents _accents;
     private readonly ContextTracker _context = new();
     private volatile ScoringOptions _options;
 
     /// <param name="alwaysConvert">Words the user converted by hotkey: converted automatically from then on.</param>
-    public DecisionEngine(DualDecoder decoder, Scorer scorer, INeverConvertList neverConvert, ScoringOptions? options = null, INeverConvertList? alwaysConvert = null)
+    /// <param name="accents">Puts the tonos back on Greek replacements typed without it ("kanei" → "κάνει").</param>
+    public DecisionEngine(DualDecoder decoder, Scorer scorer, INeverConvertList neverConvert, ScoringOptions? options = null, INeverConvertList? alwaysConvert = null, IGreekAccents? accents = null)
     {
         _decoder = decoder;
         _scorer = scorer;
         _neverConvert = neverConvert;
         _alwaysConvert = alwaysConvert ?? new NeverConvertList();
+        _accents = accents ?? new NoGreekAccents();
         _options = options ?? new ScoringOptions();
     }
 
@@ -69,13 +72,16 @@ public sealed class DecisionEngine
     /// <summary>What <paramref name="keys"/> look like on screen when shown as <paramref name="shown"/>.</summary>
     /// <remarks>
     /// The typed layout's raw reading if the word was kept, or the replacement text (final sigma
-    /// fixed) if it was converted to the other language.
+    /// fixed, accents restored) if it was converted to the other language.
     /// </remarks>
     public string Display(IReadOnlyList<KeyStroke> keys, Lang typedLayout, Lang shown)
     {
         var text = _decoder.Decode(keys, shown);
-        return shown != typedLayout && shown == Lang.Greek ? GreekText.FixFinalSigma(text) : text;
+        return shown != typedLayout && shown == Lang.Greek ? AsGreekReplacement(text) : text;
     }
+
+    /// <summary>A Greek reading as it is typed out when converted: final sigma fixed and missing accents put back.</summary>
+    private string AsGreekReplacement(string reading) => _accents.Restore(GreekText.FixFinalSigma(reading));
 
     public Decision Decide(CompletedWord word) =>
         word.Tainted ? new Keep(KeepReason.PartialWord)
@@ -249,7 +255,7 @@ public sealed class DecisionEngine
             context.Record(target, _options.ContextWindow);
         }
 
-        var text = target == Lang.Greek ? GreekText.FixFinalSigma(alternative) : alternative;
+        var text = target == Lang.Greek ? AsGreekReplacement(alternative) : alternative;
         return new Replace(current, text, currentLayout, target, reason);
     }
 }

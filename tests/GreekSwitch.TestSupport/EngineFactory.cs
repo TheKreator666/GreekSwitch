@@ -13,5 +13,6 @@ public static class EngineFactory
             new Scorer(data.Dictionaries, data.Trigrams, data.Frequencies),
             neverConvert ?? new NeverConvertList(),
             options,
-            alwaysConvert);
+            alwaysConvert,
+            data.Accents);
 }

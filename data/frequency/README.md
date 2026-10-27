@@ -4,6 +4,7 @@
 |---|---|---|
 | `el.tsv`, `en.tsv` | The most frequent words of each language as `word<TAB>zipf` (Zipf = log10 of occurrences per billion words), most frequent first. Exported from wordfreq by `tools/FrequencyExport/export_wordfreq.py`. | the evaluation harness; the input to the builder below |
 | `el.zipf`, `en.zipf` | The same, compiled to a compact binary table by `tools/FrequencyTableBuilder`, and **embedded in GreekSwitch.Core** | the decision engine (both-readings-are-words rule, short-word rule) |
+| `el.accents` | The accented spelling of each Greek key, from the same builder, **embedded in GreekSwitch.Core** | `GreekAccentTable`: puts the tonos back on Greek replacements typed without it (`kanei` → `κάνει`) |
 
 License: the data comes from wordfreq (https://github.com/rspeer/wordfreq) and is **CC BY-SA 4.0**,
 and so are these tables, also in their embedded form. See THIRD_PARTY_NOTICES.md.
@@ -22,12 +23,24 @@ Keys are normalised the way `WordFrequencyTable` looks them up. Greek keys are l
 without tonos or dialytika, with ς as σ. English keys are lowercase. When several words share a
 key (που/πού), the most frequent one wins. Loading builds one dictionary per language (~90k keys).
 
+## Binary format (`.accents`, v1)
+
+```
+"GSAC"            4 bytes, ASCII
+version           1 byte (= 1)
+count             int32, little-endian
+count × entry:    length (byte) + lowercase spelling (UTF-8)
+```
+
+One spelling per key: the most frequent spelling of each key, kept only when it carries a tonos
+or dialytika (so `που` and `και` are not in it). The lookup key is computed at load time.
+
 ## Regenerating
 
 ```bash
 pip install wordfreq==3.1.1
 python tools/FrequencyExport/export_wordfreq.py          # → el.tsv, en.tsv
-dotnet run --project tools/FrequencyTableBuilder -c Release -- data/frequency   # → el.zipf, en.zipf
+dotnet run --project tools/FrequencyTableBuilder -c Release -- data/frequency   # → el.zipf, en.zipf, el.accents
 ```
 
-Commit all four files.
+Commit all five files.

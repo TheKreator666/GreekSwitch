@@ -13,12 +13,15 @@ public sealed class TextConverter
     private readonly LayoutMap _greek;
     private readonly LayoutMap _english;
     private readonly DualDecoder _decoder;
+    private readonly IGreekAccents _accents;
 
-    public TextConverter(LayoutMap greek, LayoutMap english)
+    /// <param name="accents">Puts the tonos back on Greek words typed without it.</param>
+    public TextConverter(LayoutMap greek, LayoutMap english, IGreekAccents? accents = null)
     {
         _greek = greek;
         _english = english;
         _decoder = new DualDecoder(greek, english);
+        _accents = accents ?? new NoGreekAccents();
     }
 
     public string Convert(string text)
@@ -64,6 +67,6 @@ public sealed class TextConverter
 
         var target = source.Other();
         var converted = _decoder.Decode(keys, target);
-        return target == Lang.Greek ? GreekText.FixFinalSigma(converted) : converted;
+        return target == Lang.Greek ? _accents.Restore(GreekText.FixFinalSigma(converted)) : converted;
     }
 }
