@@ -30,6 +30,11 @@ dotnet test tests/GreekSwitch.Core.Tests -c Release --filter "FullyQualifiedName
 
 Regenerate the trigram models with the commands in `data/ngrams/README.md`. Commit the output.
 
+**Every push rebuilds the app.** A local git `pre-push` hook (`.git/hooks/pre-push`, not versioned)
+runs `./build.ps1`, so `publish/` always holds the exes for what was pushed; a failing test stops
+the push. Never push with `--no-verify`. On a fresh clone, recreate the hook (it just runs
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./build.ps1`).
+
 ## Pipeline (as built)
 
 ```
