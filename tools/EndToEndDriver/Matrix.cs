@@ -61,7 +61,7 @@ internal static class Matrix
                     : Process.GetProcessesByName("WINWORD").Length > 0 ? "Word is already open: close it to include Word" : null),
             new("Edge, textarea", "msedge", () => Process.Start(edge!, $"--user-data-dir={Quote(Profile("edge"))} {BrowserFlags} {Quote(textarea)}"), () => edge is null ? "not installed" : null),
             new("Chrome, contenteditable", "chrome", () => Process.Start(chrome!, $"--user-data-dir={Quote(Profile("chrome"))} {BrowserFlags} {Quote(editable)}"), () => chrome is null ? "not installed" : null),
-            new("Firefox, textarea", "firefox", () => Process.Start(firefox!, $"-no-remote -profile {Quote(Profile("firefox"))} {Quote(textarea)}"), () => firefox is null ? "not installed" : null),
+            new("Firefox, textarea", "firefox", () => Process.Start(firefox!, $"-no-remote -profile {Quote(FirefoxProfile(Profile("firefox")))} {Quote(textarea)}"), () => firefox is null ? "not installed" : null),
             new("WordCraft", "wordcraft", () => Process.Start(wordcraft!, Quote(NewDocx(wordcraft!, rtf, docx))),
                 () => wordcraft is null ? "not installed"
                     : Process.GetProcessesByName("wordcraft").Length > 0 ? "WordCraft is already open: close it to include it" : null),
@@ -135,6 +135,19 @@ internal static class Matrix
             finally
             {
                 Program.ReleaseModifiers();
+                if (target.Name == "Notepad" && !stopped)
+                {
+                    // Windows 11 Notepad keeps unsaved changes across a kill and, at the next run,
+                    // asks "Keep unsaved changes?" about the rewritten file; that dialog takes the keys.
+                    try
+                    {
+                        Program.SaveDocument(); // the document is empty by now
+                    }
+                    catch (Exception e) when (Program.IsFocusLost(e))
+                    {
+                    }
+                }
+
                 Close(target.Name, process);
                 Program.TargetIsForeground = () => false;
             }
@@ -258,6 +271,25 @@ internal static class Matrix
         using var convert = Process.Start(new ProcessStartInfo(cli) { ArgumentList = { "convert", rtf, docx }, UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true })!;
         convert.WaitForExit(30_000);
         return docx;
+    }
+
+    /// <summary>
+    /// A fresh Firefox profile opens a welcome / terms-of-use page in front of the test page, and the
+    /// keys and the read-back go there. These prefs skip it.
+    /// </summary>
+    private static string FirefoxProfile(string dir)
+    {
+        File.WriteAllLines(Path.Combine(dir, "user.js"),
+        [
+            """user_pref("browser.preonboarding.enabled", false);""",
+            """user_pref("browser.aboutwelcome.enabled", false);""",
+            """user_pref("trailhead.firstrun.didSeeAboutWelcome", true);""",
+            """user_pref("termsofuse.bypassNotification", true);""",
+            """user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);""",
+            """user_pref("browser.startup.homepage_override.mstone", "ignore");""",
+            """user_pref("browser.shell.checkDefaultBrowser", false);""",
+        ]);
+        return dir;
     }
 
     private static string Quote(string path) => $"\"{path}\"";

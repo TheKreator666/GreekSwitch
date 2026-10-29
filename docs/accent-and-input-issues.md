@@ -135,6 +135,12 @@ no-break space as a space (one Backspace deletes either). Chrome 0/5 → 4/5.
    Typing → Autocorrect misspelled words* (the registry under `HKCU\Software\Microsoft\input\Settings`
    showed no values set). Check both on the machine. Either way, other apps (Word, Outlook,
    browsers with spell check) can rewrite words too, so GreekSwitch has to cope.
+   **Answered (2026-10-29, Windows 11, Notepad 11.2607):** Notepad's own *Autocorrect*. It also
+   **drops keys** that arrive while it rewrites a word: with it on, the matrix lost letters in
+   Notepad (`dδουλεύει`, `θέλω α`, `application` gone), varying run to run; `--probe` lost a key
+   with no hook installed at all; `layoutSwitchSettleMs` 150 didn't help. With it off, 5/5 in
+   every run. Documented as a known limitation (turn it off); not worked around.
+   Same session, everything else on Windows 11: Edge, Chrome, Firefox, WordCraft 5/5.
 2. **One line was mostly deleted** at 150 ms (accents at a pause, 44-character batch, text
    check passed). Not explained. Most likely an app-side change landed between the check and
    the batch. Reproduce before guessing; if it recurs, compare the text right after the batch.

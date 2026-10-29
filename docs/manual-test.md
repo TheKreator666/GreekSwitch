@@ -22,6 +22,9 @@ test mode; see the comment at the top of its `Program.cs`. It doesn't replace th
 
 ## 1. Notepad (the reference sentence)
 
+On Windows 11, first turn off Notepad → Settings → Spelling → *Autocorrect*: with it on,
+Notepad drops keys that arrive while it rewrites a word, ours included (README, *Known limitations*).
+
 - [ ] Switch to Greek and type `Θέλω να φτιάξω ένα `. Nothing changes.
 - [ ] Still in Greek, type the keys for "application" followed by Space (you see `αππλιψατιον`).
       It becomes `application ` and the layout switches to EN.

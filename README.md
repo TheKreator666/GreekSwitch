@@ -266,6 +266,11 @@ text. A unit test enforces this.
   custom-drawn UIs) can't be detected; add them to the exclusion list.
 - **Apps with their own autocorrect or autocomplete** (Word, some chat apps) may also react to
   the retyped text.
+- **Windows 11 Notepad with its Autocorrect on** can lose letters around a correction (`θέλω α`
+  for `θέλω να`, a word left half-deleted). Notepad's Autocorrect rewrites the word after Space and
+  drops keys that arrive meanwhile, including ours; it does this with GreekSwitch stopped too.
+  Turn it off in Notepad → Settings → Spelling → *Autocorrect* (spell check can stay on).
+  Classic Notepad (Windows 10) has no Autocorrect.
 - **Enter/Tab-ended words aren't corrected** unless you turn on `correctOnEnterAndTab`.
 - **Memory and size.** About 90 MB of RAM in use (the dictionaries are hashed word lists of
   ~7 MB; the rest is .NET and WinForms). The self-contained exe is about 70 MB.

@@ -635,6 +635,13 @@ internal static partial class Program
 
     internal static string ReadAndClearText() => ReadAndClear();
 
+    /// <summary>Ctrl+S into the test window (only if it's still in front: throws otherwise).</summary>
+    internal static void SaveDocument()
+    {
+        Chord('S', Ctrl);
+        Thread.Sleep(500);
+    }
+
     internal static void Expect(string name, string actual, string expected) => Check(name, actual, expected);
 
     internal static int Failures => _failures;
